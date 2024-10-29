@@ -16,27 +16,32 @@ function setup(){
 }
 
 //メインループ
+var FPS = 75;
 const Scene = Object.freeze({
     TITLE: 0,
     STAGE: 1,
     GAMEOVER: -1,
 });
+const AUTO_MISSILE_CD = int(5 * FPS/30);
+const IFRAME = int(30 * FPS/30);
+const MAX_SHIP_ENERGY = 10;
+const ENEMY_IFRAME = int(1 * FPS/30);
+
 var tmr = 0;
 var scene = Scene.TITLE;
 var stage = 1;
-const AUTO_MISSILE_CD = 5;
-const IFRAME = 30;
 var score = 0;
 var hiScore = 0;
 
 function mainloop(){
     tmr++;
     drawBG(1);
+    setFPS(FPS);
     
     switch (scene) {
         case Scene.TITLE:
             drawImg(13, 200, 200);
-            if (tmr % 40 < 20)fText("Press [SPC] or Click to start.", 600, 540, 40, "cyan");
+            if (tmr % int(FPS*4/3) < int(FPS*2/3))fText("Press [SPC] or Click to start.", 600, 540, 40, "cyan");
             if (key[32] == 1 || tapC == 1) {
                 key[32] = 0;
                 tapC = 0;
@@ -75,8 +80,8 @@ function mainloop(){
 
         case Scene.GAMEOVER:
             const [x,y] = getShipLocation();
-            if (tmr > 30*5) scene = Scene.TITLE;
-            else if (tmr % 5 == 1) setExplosion(x+rnd(120)-60, y+rnd(90)-40, 9);
+            if (tmr > FPS*5) scene = Scene.TITLE;
+            else if (tmr % int(FPS*1/6) == 1) setExplosion(x+rnd(120)-60, y+rnd(90)-40, 9);
             moveObjects();
             moveMissile();
             drawEffects();
@@ -121,14 +126,15 @@ class GameObject {
         this.x = x;
         this.y = y;
         this.xp = xp;
-        this.yp = yp;
+        this.yp = yp ;
         this.t = t;
         this.life = life;
+        this.muteki = 0;
     }
     
     drawObject(){
-        this.x = this.x + this.xp;
-        this.y = this.y + this.yp;
+        this.x = this.x + this.xp * 30/FPS;
+        this.y = this.y + this.yp * 30/FPS;
         drawImgC(this.t, this.x, this.y);
     }
 
@@ -140,19 +146,18 @@ class GameObject {
 //自機の管理
 class SShip {
     constructor(x, y){
-        this.ship = new GameObject(x,y,0,0,1,10);
+        this.ship = new GameObject(x,y,0,0,1,MAX_SHIP_ENERGY);
         //this.energy = 10;
-        this.muteki = 0;
         this.auto = false;
         this.missileTmr = 0;
     }
 
     moveSShip(){
         //Ship movement
-        this.ship.x += ((key[39] && 1) - (key[37] && 1)) * 20;
+        this.ship.x += int(((key[39] && 1) - (key[37] && 1)) * 20 * 30/FPS);
         if (this.ship.x >= 1000) this.ship.x = 999; 
         if (this.ship.x <= 60) this.ship.x = 61;
-        this.ship.y += ((key[40] && 1) - (key[38] && 1)) * 20; 
+        this.ship.y += int(((key[40] && 1) - (key[38] && 1)) * 20 * 30/FPS); 
         if (this.ship.y >= 680) this.ship.y = 679; 
         if (this.ship.y <= 40) this.ship.y = 41;
         
@@ -183,8 +188,8 @@ class SShip {
             key[32] = 2;      
         }
     
-        if (this.muteki % 2 == 0) this.ship.drawObject();
-        if (this.muteki > 0) this.muteki--;
+        if (this.ship.muteki % 2 == 0) this.ship.drawObject();
+        if (this.ship.muteki > 0) this.ship.muteki--;
     }
 
     getEnergy(){
@@ -196,7 +201,7 @@ var sShip = new SShip(400,360);
 
 
 //自機が撃つ弾の管理
-const MAX_MISSILES = 100;
+const MAX_MISSILES = 1000;
 
 class Missiles {
     constructor(){
@@ -259,8 +264,9 @@ class Effect {
 
     drawEffect(){
         if(this.n > 0){
-            drawImgTS(3, (9-this.n)*128, 0, 128, 128, this.x - 64, this.y - 64, 128, 128);
-            this.n--;
+            var n = int(this.n);
+            drawImgTS(3, (9-n)*128, 0, 128, 128, this.x - 64, this.y - 64, 128, 128);
+            this.n -= 1 * 30/FPS;
         }
     }
 }
@@ -332,7 +338,7 @@ class Enemies {
                 switch (this.enemies[i].t) {
 
                     //enemy 01
-                    case 5: if (this.enemies[i].t == 5 && rnd(100) < 3) 
+                    case 5: if (this.enemies[i].t == 5 && rnd(10000) < 300*30/FPS) 
                                 this.setEnemies(this.enemies[i].x, this.enemies[i].y, -24, 0, 4);
                             break;
                     
@@ -343,7 +349,8 @@ class Enemies {
                     
                     //enemy 03
                     case 7: if (this.enemies[i].xp < 0){
-                                this.enemies[i].xp = int(this.enemies[i].xp * 0.95);
+                                //this.enemies[i].xp = int(this.enemies[i].xp * Math.pow(0.95, 30/FPS)); //adjust speed with FPS;
+                                if(tmr % Math.ceil(FPS/30) == 0) this.enemies[i].xp = int(this.enemies[i].xp * 0.95); //adjust speed with FPS;
                                 if (this.enemies[i].xp == 0){
                                     this.setEnemies(this.enemies[i].x, this.enemies[i].y, -20, 0, 4);
                                     this.enemies[i].xp = 20;
@@ -355,6 +362,8 @@ class Enemies {
                 }
                 
                 this.enemies[i].drawObject();
+
+                if (this.enemies[i].muteki > 0) this.enemies[i].muteki--;
                 
 
                 if (this.enemies[i].x < 0 || this.enemies[i].x > 1400) {
@@ -365,15 +374,19 @@ class Enemies {
     }
 
     decreaseEnemyLife(i){
+        if (this.enemies[i].muteki > 0) return;
         this.enemies[i].life -= 1;
         if (this.enemies[i].life == 0){ 
             setExplosion(this.enemies[i].x, this.enemies[i].y, 9)
             this.deleteEnemies(i);
             score += 100;
             if (score > hiScore) hiScore = score;
-        }else setExplosion(this.enemies[i].x, this.enemies[i].y, 4);
+        }
+        else{ 
+            setExplosion(this.enemies[i].x, this.enemies[i].y, 4);
+            this.enemies[i].muteki = ENEMY_IFRAME;
+        }
     }
-
     deleteEnemies(i){
         if (this.enemies[i]){
             delete this.enemies[i];
@@ -392,7 +405,7 @@ const MAX_ITEMS = 100
 //アイテムをセットする
 class Items { // *****TODO*****
     constructor(){
-        this.items = new Array(100);
+        this.items = new Array(MAX_ITEMS);
         this.numItems = 0;
     }
 
@@ -438,33 +451,33 @@ function initObject(){
 }
 
 function setEnemies(){
-    var sec = int(tmr/30);
-    if ((sec >= 4 && sec < 10) && tmr % 20 == 0) enemies.setEnemies(1300, 60+rnd(600), -16, 0, 5);
+    var sec = int(tmr/FPS);
+    if ((sec >= 4 && sec < 10) && tmr % (20*FPS/30)  == 0) enemies.setEnemies(1300, 60+rnd(600), -16, 0, 5);
     
-    if ((sec >= 14 && sec < 20) && tmr % 20 == 0) enemies.setEnemies(1300, 60+rnd(600), -12, rnd(2)?8:-8 , 6);
+    if ((sec >= 14 && sec < 20) && tmr % (20*FPS/30) == 0) enemies.setEnemies(1300, 60+rnd(600), -12, rnd(2)?8:-8 , 6);
     
-    if ((sec >= 24 && sec < 30) && tmr % 20 == 0) enemies.setEnemies(1300, 360+rnd(300), -48, -10, 7);
+    if ((sec >= 24 && sec < 30) && tmr % (20*FPS/30) == 0) enemies.setEnemies(1300, 360+rnd(300), -48, -10, 7);
     
-    if ((sec >= 34 && sec < 50) && tmr % 60 == 0) enemies.setEnemies(1300, rnd(720-192), -6, 0, 8);
+    if ((sec >= 34 && sec < 50) && tmr % (60*FPS/30) == 0) enemies.setEnemies(1300, rnd(720-192), -6, 0, 8);
     
-    if ((sec >= 54 && sec < 70) && tmr % 20 == 0) {
+    if ((sec >= 54 && sec < 70) && tmr % (20*FPS/30) == 0) {
         enemies.setEnemies(1300, 60+rnd(300), -16, 4, 5);
         enemies.setEnemies(1300, 360+rnd(300), -16, -4, 5);
     }
 
     if (sec >= 74 && sec < 90) {
-        if(tmr % 20 == 0) enemies.setEnemies(1300, 60+rnd(600), -12, rnd(2)?8:-8 , 6);
-        if(tmr % 45 == 0) enemies.setEnemies(1300, rnd(720-192), -8, 0, 8);
+        if(tmr % (20*FPS/30) == 0) enemies.setEnemies(1300, 60+rnd(600), -12, rnd(2)?8:-8 , 6);
+        if(tmr % (45*FPS/30) == 0) enemies.setEnemies(1300, rnd(720-192), -8, 0, 8);
     }
 
     if (sec >= 94 && sec < 110) {
-        if (tmr % 10 == 0) enemies.setEnemies(1300, 360, -24, rnd(11)-5, 5);
-        if (tmr % 20 == 0) enemies.setEnemies(1300, rnd(300), -56, 4+rnd(12), 7);
+        if (tmr % (10*FPS/30) == 0) enemies.setEnemies(1300, 360, -24, rnd(11)-5, 5);
+        if (tmr % (20*FPS/30) == 0) enemies.setEnemies(1300, 360+rnd(300), -56, -(4+rnd(12)), 7);
     }
 }
 
 function setItems(){
-    if (tmr % 360 == 0) items.setItems(1300, 60 + rnd(600), -10, 0, rnd(3) + 9);
+    if (tmr % (12*FPS) == 0) items.setItems(1300, 60 + rnd(600), -10, 0, rnd(3) + 9);
 }
 
 function setMissile(){
@@ -503,10 +516,10 @@ function hitCheck(){
         var r2 = (img[enemies.getType(i)].width + img[enemies.getType(i)].height)/4;
 
         //Enemies x SShip
-        if (enemies.enemies[i].hitCheck(sShip.ship, SELF_RADIUS, r2) && sShip.muteki == 0){
+        if (enemies.enemies[i].hitCheck(sShip.ship, SELF_RADIUS, r2) && sShip.ship.muteki == 0){
             //explosions.setExplosion(enemies.enemies[i].x, enemies.enemies[i].y, 9);
             sShip.ship.life--;
-            sShip.muteki = 30;
+            sShip.ship.muteki = IFRAME;
             enemies.decreaseEnemyLife(i);
         }
 
@@ -532,9 +545,9 @@ function hitCheck(){
         var r = (img[t].width + img[t].height)/4;
         if (items.items[i].hitCheck(sShip.ship, SELF_RADIUS, r)){
             switch (t){
-                case 9:  if (sShip.getEnergy() < 10) sShip.ship.life++; break;
+                case 9:  if (sShip.getEnergy() < MAX_SHIP_ENERGY) sShip.ship.life++; break;
                 case 10: missiles.numPowerUp++; break;
-                case 11: missiles.numLaser = 100; break;
+                case 11: missiles.numLaser += 50; break;
             }
             
             items.deleteItems(i);
@@ -558,7 +571,7 @@ function autoHandle(){
 
 function lifeGaugeHandle() {
     //Life gauge
-    for (var i = 0; i < 10; i++) fRect(20+i*30, 660, 20, 40, "#c00000");
+    for (var i = 0; i < MAX_SHIP_ENERGY; i++) fRect(20+i*30, 660, 20, 40, "#c00000");
     for (var i = 0; i < getEnergy(); i++) fRect(20+i*30, 660, 20, 40, colorRGB(160-16*i, 240-12*i, 24*i));
 }
 
@@ -574,13 +587,14 @@ function gameoverCheck(){
     if (getEnergy() <= 0){ 
         scene = Scene.GAMEOVER;
         tmr = 0;
+        stopBgm();
     }
 }
 
 function stageHandle(){
-    if (tmr < 30*4) fText("STAGE " + stage, 600, 300, 50, "cyan");
-    if (tmr > 30*114 && tmr < 30*118) fText("STAGE CLEAR", 600, 300, 50, "cyan");
-    if (tmr == 30 * 120) {
+    if (tmr < FPS*4) fText("STAGE " + stage, 600, 300, 50, "cyan");
+    if (tmr > FPS*114 && tmr < FPS*118) fText("STAGE CLEAR", 600, 300, 50, "cyan");
+    if (tmr == FPS * 120) {
         stage++;
         tmr = 0;
     }
