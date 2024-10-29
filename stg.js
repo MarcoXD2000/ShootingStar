@@ -525,6 +525,7 @@ function hitCheck(){
         }
     }
 
+    //Ship x items
     for (var i = 0; i < MAX_ITEMS; i++){
         if (!items.items[i]) continue;
         var t = items.getType(i);
@@ -533,7 +534,7 @@ function hitCheck(){
             switch (t){
                 case 9:  if (sShip.getEnergy() < 10) sShip.ship.life++; break;
                 case 10: missiles.numPowerUp++; break;
-                case 11: missiles.numLaser += 100; break;
+                case 11: missiles.numLaser = 100; break;
             }
             
             items.deleteItems(i);
