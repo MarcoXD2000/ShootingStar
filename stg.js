@@ -16,11 +16,24 @@ function setup(){
 }
 
 //メインループ
+//Keyboard Control
+const CONTROL = {
+    UP:     38,
+    DOWN:   40,
+    LEFT:   37,
+    RIGHT:  39,
+    FIRE:   32,
+    AUTO:   65,
+    SELECT: 13,
+}
+
 var FPS = 75;
 const Scene = Object.freeze({
     TITLE: 0,
     STAGE: 1,
     GAMEOVER: -1,
+    SETTING: 114,
+    KEYBINDS: 514,
 });
 const AUTO_MISSILE_CD = int(5 * FPS/30);
 const IFRAME = int(30 * FPS/30);
@@ -32,6 +45,7 @@ var scene = Scene.TITLE;
 var stage = 1;
 var score = 0;
 var hiScore = 0;
+var menu = 0;
 
 function mainloop(){
     tmr++;
@@ -40,38 +54,22 @@ function mainloop(){
     
     switch (scene) {
         case Scene.TITLE:
-            drawImg(13, 200, 200);
-            if (tmr % int(FPS*4/3) < int(FPS*2/3))fText("Press [SPC] or Click to start.", 600, 540, 40, "cyan");
-            if (key[32] == 1 || tapC == 1) {
-                key[32] = 0;
-                tapC = 0;
-                initSShip();
-                initObject();
-                score = 0; 
-                stage = 1;
-                scene = Scene.STAGE;
-                tmr = 0;
-                playBgm(0);
-                score = 0;
-            }
-            
+            if (tmr % int(FPS*4/3) < int(FPS*2/3))fText("Press [Enter] or Click to select.", 600, 600, 40, "cyan");
+            mainMenu();
             break;
 
 
         case Scene.STAGE:
             gameoverCheck();
-
             moveSShip();
             moveObjects();
             moveMissile();
             setEnemies();
             setItems();
-            
             hitCheck();
             autoHandle();
             lifeGaugeHandle();
             drawEffects();
-            
             stageHandle();
 
             //console.log("tmr = ", tmr);
@@ -87,6 +85,14 @@ function mainloop(){
             drawEffects();
             fText("GAME OVER", 600, 300, 50, "red");
             
+            break;
+
+        case Scene.SETTING:
+            settingMenu();
+            break;
+
+        case Scene.KEYBINDS:
+            keybindsMenu();
             break;
     }
 
@@ -154,17 +160,17 @@ class SShip {
 
     moveSShip(){
         //Ship movement
-        this.ship.x += int(((key[39] && 1) - (key[37] && 1)) * 20 * 30/FPS);
+        this.ship.x += int(((key[CONTROL.RIGHT] && 1) - (key[CONTROL.LEFT] && 1)) * 20 * 30/FPS);
         if (this.ship.x >= 1000) this.ship.x = 999; 
         if (this.ship.x <= 60) this.ship.x = 61;
-        this.ship.y += int(((key[40] && 1) - (key[38] && 1)) * 20 * 30/FPS); 
+        this.ship.y += int(((key[CONTROL.DOWN] && 1) - (key[CONTROL.UP] && 1)) * 20 * 30/FPS); 
         if (this.ship.y >= 680) this.ship.y = 679; 
         if (this.ship.y <= 40) this.ship.y = 41;
         
 
         //Touch/Mouse
         if (tapC > 0){
-            if (tapX > 900 && tapX < 1180 && tapY > 20 && tapY < 80){
+            if (isMouseInABox(900, 20, 1180, 80)){
                 tapC = 0;
                 this.auto = !this.auto;
             }
@@ -175,17 +181,17 @@ class SShip {
         }
         
         //missile movement
-        if (key[65] == 1){
-            key[65] = 2;
+        if (key[CONTROL.AUTO] == 1){
+            key[CONTROL.AUTO] = 2;
             this.auto = !this.auto;
         }
     
         //prevent auto and spc at the same time
-        if (this.auto) key[32] = 2;
+        if (this.auto) key[CONTROL.FIRE] = 2;
 
-        if (key[32] == 1 || (this.auto && !(this.missileTmr))){ 
+        if (key[CONTROL.FIRE] == 1 || (this.auto && !(this.missileTmr))){ 
             setMissile();
-            key[32] = 2;      
+            key[CONTROL.FIRE] = 2;      
         }
     
         if (this.ship.muteki % 2 == 0) this.ship.drawObject();
@@ -604,3 +610,250 @@ function drawScore(){
     fText("SCORE " + score, 200, 50, 40, "white");
     fText("HISCORE " + hiScore, 600, 50, 40, "yellow");
 }
+
+//x1,y1 : top left, x2,y2 : bottom right
+function isMouseInABox(x1, y1, x2, y2){
+    if (tapX > x1 && tapX < x2 && tapY > y1 && tapY < y2) return true;
+    return false;
+}
+
+//Interfaces
+
+//Sliding bar object
+class SlidingBar {
+    constructor(x, y, length, height, min, max, step, value, color1 = "grey", color2 = "white"){
+        this.x = x;
+        this.y = y;
+        this.length = length;
+        this.height = height;
+        this.min = min;
+        this.max = max;
+        this.step = step;
+        this.value = value;
+        this.color1 = color1;
+        this.color2 = color2;
+    }
+
+    drawBar(){
+        fRect(this.x, (this.y + this.height/4), this.length, this.height/2, this.color1);
+        var knot = this.x + this.length/(this.max - this.min) * (this.value - this.min); // x coordinate of the knot
+        fRect(knot, this.y, 10, this.height, this.color2);
+        fText(this.min, this.x - 40, this.y+this.height/2, this.height/2, this.color2);
+        fText(this.max, this.x + this.length + 40, this.y+this.height/2, this.height/2, this.color2);
+        fText(this.value, this.x + this.length/2, this.y+this.height/2, this.height/2, this.color2);
+    }
+
+    dragBar(){
+        
+        this.changeValue((tapX - this.x) / this.length * (this.max-this.min) + this.min);
+        
+        this.value = Math.round(this.value/this.step)*this.step;
+        
+        if (this.value < this.min) this.value = this.min;
+        else if (this.value > this.max) this.value = this.max; 
+    }
+    
+    changeValue(v){
+        //process of snapping to the nearest step
+        //***TODO***
+        const float2rational = function(){
+            
+        }
+        this.value = v;
+        this.value = Math.round(this.value/this.step)*this.step;
+        if (this.value < this.min) this.value = this.min;
+        else if (this.value > this.max) this.value = this.max; 
+    }
+
+    getValue(){
+        return this.value;
+    }
+}
+
+//Box Button Object
+const SELECTED = true;
+class BoxButton {
+    constructor(x,y,length,width,fontSize = 40 ,text = " sample",textColor = "white" ,boxColor = "black", boxAlpha = 70, clickFunction = function(){}){
+        this.clickFunction = clickFunction;
+
+        this.x = x;
+        this.y = y;
+        this.length = length;
+        this.width = width;
+        this.fontSize = fontSize;
+        this.text = text;
+        this.textColor = textColor;
+        this.boxColor = boxColor;
+        this.boxAlpha = boxAlpha;
+    }
+
+    onClick(){
+        this.clickFunction();
+    }
+
+    drawButton(isSelect){
+        if(isSelect){
+            setAlp(this.boxAlpha);
+            fRect(this.x,this.y,this.length,this.width,this.boxColor);
+            setAlp(100);
+        }
+        fText(this.text, this.x + this.length/2, this.y + this.width/2, this.fontSize, this.textColor);
+    }
+
+    isPointing(){
+        return isMouseInABox(this.x,this.y,this.x+this.length,this.y+this.width);
+    }
+}
+
+//Title Screen / Main menu
+
+//Buttons
+const playButtonFunction = function(){
+    key[CONTROL.FIRE] = 0;
+    key[CONTROL.SELECT] = 0;
+    tapC = 0;
+    initSShip();
+    initObject();
+    score = 0; 
+    stage = 1;
+    scene = Scene.STAGE;
+    tmr = 0;
+    playBgm(0);
+    score = 0;
+    menu = 0;
+}
+var playButton = new BoxButton(500, 375, 200, 50, 40, "Play", "cyan", "purple", 70, playButtonFunction);
+
+const settingButtonFunction = function(){
+    key[CONTROL.FIRE] = 0;
+    key[CONTROL.SELECT] = 0;
+    tapC = 0;
+    menu = 0;
+    scene = Scene.SETTING;
+}
+var settingButton = new BoxButton(500, 475, 200, 50, 40, "Setting", "cyan", "purple", 70, settingButtonFunction);
+
+//Console
+function mainMenu(){
+    drawImg(13, 200, 100);
+
+    if (key[CONTROL.UP] == 1) {
+        menu--;
+        key[CONTROL.UP] = 2;
+    }
+    if (key[CONTROL.DOWN] == 1) {
+        menu++;
+        key[CONTROL.DOWN] = 2;
+    }
+
+    menu = menu % 2;
+    menu < 0? menu=2+menu : menu;
+
+    if (playButton.isPointing()) menu = 0;
+    else if (settingButton.isPointing()) menu = 1;
+    
+    playButton.drawButton(menu==0?SELECTED:!SELECTED);
+    settingButton.drawButton(menu==1?SELECTED:!SELECTED);
+    
+    if (menu == 0) {
+        if (key[CONTROL.FIRE] == 1 || key[CONTROL.SELECT] == 1 || (tapC == 1 && isMouseInABox(500, 350, 700, 450))){
+            playButton.onClick();
+        }
+    }
+    else if (menu == 1) {
+        if (key[CONTROL.FIRE] == 1 || key[CONTROL.SELECT] == 1 || (tapC == 1 && isMouseInABox(500, 450, 700, 550))){
+            settingButton.onClick();
+        }
+    }
+    
+}
+
+//Setting Menu
+
+//fps drag bar
+var fpsBar = new SlidingBar(312, 440, 576, 40, 30, 144, 1, FPS);
+
+//fps button
+var fpsButton = new BoxButton(500,375,200,50,40,"FPS","cyan","purple",70);
+
+//Keybinds button
+const controlButtonFunction = function(){
+    scene = Scene.KEYBINDS;
+    key[CONTROL.FIRE] = 0;
+    key[CONTROL.SELECT] = 0;
+    tapC = 0;
+    menu = 0;  
+}
+var controlButton = new BoxButton(500, 500, 200, 50, 40, "Controls","cyan","purple",70, controlButtonFunction);
+
+//Back button
+const settingBackButtonFunction = function(){
+    scene = Scene.TITLE;
+    key[CONTROL.FIRE] = 0;
+    key[CONTROL.SELECT] = 0;
+    tapC = 0;
+    menu = 0;
+}
+var settingBackButton = new BoxButton(50, 625, 100, 50, 40, "Back","cyan","purple",70, settingBackButtonFunction);
+
+var dragging = false;
+var BarCD = 1 * (FPS/30);
+
+function settingMenu(){
+    drawImg(13, 200, 100);
+    if (!tapC) dragging = false; 
+    
+    if (key[CONTROL.UP] == 1) {
+        menu--;
+        key[CONTROL.UP] = 2;
+    }
+    if (key[CONTROL.DOWN] == 1) {
+        menu++;
+        key[CONTROL.DOWN] = 2;
+    }
+
+    menu = menu % 3;
+    menu < 0? menu=3+menu : menu;
+
+    //console.log(menu);
+
+    if (key[CONTROL.LEFT] || key[CONTROL.RIGHT] || fpsButton.isPointing()) menu = 0;
+    else if (controlButton.isPointing()) menu = 1;
+    else if (settingBackButton.isPointing()) menu = 2;
+    
+    fpsButton.drawButton(menu == 0? SELECTED:!SELECTED);
+    controlButton.drawButton(menu == 1? SELECTED:!SELECTED);
+    settingBackButton.drawButton(menu == 2? SELECTED:!SELECTED);
+
+    //keyboard <- / -> change fps
+    if (key[CONTROL.LEFT] && (tmr % BarCD == 0)) fpsBar.changeValue(--FPS);
+    if (key[CONTROL.RIGHT] && (tmr % BarCD == 0)) fpsBar.changeValue(++FPS);
+    
+    if (dragging || (tapC && isMouseInABox(312, 440, 312+576, 440+40))) {
+        menu = 0;
+        fpsBar.dragBar();
+        dragging = true;
+    }   
+    fpsBar.drawBar();
+    
+    
+    if (menu == 1) {
+        if (key[CONTROL.SELECT] == 1|| key[CONTROL.FIRE] == 1 || (tapC && isMouseInABox(500, 475, 700, 575))){
+            controlButton.onClick();
+        }
+    }else if (menu == 2) {
+        if (key[CONTROL.SELECT] == 1|| key[CONTROL.FIRE] == 1 || (tapC && isMouseInABox(25, 625, 175, 675))){
+            settingBackButton.onClick();
+        }
+    }
+    
+    
+    FPS = fpsBar.getValue();
+}
+
+function keybindsMenu(){
+
+}
+
+
+

@@ -4,10 +4,10 @@
 # Update log
 
 # 0.0.1 (2024.10.29)
-Completed the base game from the textbook
+Completed the base game based on the textbook
 
 # 0.0.2 (2024.10.30)
-Add FPS setting
+Add support on adjustable FPS
 
 
 ***TODO
