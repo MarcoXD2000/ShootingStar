@@ -17,15 +17,17 @@ function setup(){
 
 //メインループ
 //Keyboard Control
-const CONTROL = {
-    UP:     38,
-    DOWN:   40,
-    LEFT:   37,
-    RIGHT:  39,
-    FIRE:   32,
-    AUTO:   65,
-    SELECT: 13,
-}
+const CONTROL = new Map();
+
+CONTROL.set('UP', 38);
+CONTROL.set('DOWN', 40);
+CONTROL.set('LEFT', 37);
+CONTROL.set('RIGHT', 39);
+CONTROL.set('FIRE', 32);
+CONTROL.set('AUTO', 65);
+CONTROL.set('SELECT', 13);
+CONTROL.set('BACK', 27);
+CONTROL.set('PAUSE', 27);
 
 var FPS = 75;
 const Scene = Object.freeze({
@@ -33,7 +35,7 @@ const Scene = Object.freeze({
     STAGE: 1,
     GAMEOVER: -1,
     SETTING: 114,
-    KEYBINDS: 514,
+    CONTROLS: 514,
 });
 const AUTO_MISSILE_CD = int(5 * FPS/30);
 const IFRAME = int(30 * FPS/30);
@@ -41,7 +43,7 @@ const MAX_SHIP_ENERGY = 10;
 const ENEMY_IFRAME = int(1 * FPS/30);
 
 var tmr = 0;
-var scene = Scene.TITLE;
+var scene = Scene.CONTROLS;
 var stage = 1;
 var score = 0;
 var hiScore = 0;
@@ -54,12 +56,12 @@ function mainloop(){
     
     switch (scene) {
         case Scene.TITLE:
-            if (tmr % int(FPS*4/3) < int(FPS*2/3))fText("Press [Enter] or Click to select.", 600, 600, 40, "cyan");
             mainMenu();
             break;
 
 
         case Scene.STAGE:
+            drawScore();
             gameoverCheck();
             moveSShip();
             moveObjects();
@@ -77,6 +79,7 @@ function mainloop(){
             break;
 
         case Scene.GAMEOVER:
+            drawScore();
             const [x,y] = getShipLocation();
             if (tmr > FPS*5) scene = Scene.TITLE;
             else if (tmr % int(FPS*1/6) == 1) setExplosion(x+rnd(120)-60, y+rnd(90)-40, 9);
@@ -91,12 +94,11 @@ function mainloop(){
             settingMenu();
             break;
 
-        case Scene.KEYBINDS:
-            keybindsMenu();
+        case Scene.CONTROLS:
+            controlsMenu();
             break;
     }
 
-    drawScore();
 }
 
 //背景のスクロール
@@ -160,10 +162,10 @@ class SShip {
 
     moveSShip(){
         //Ship movement
-        this.ship.x += int(((key[CONTROL.RIGHT] && 1) - (key[CONTROL.LEFT] && 1)) * 20 * 30/FPS);
+        this.ship.x += int(((key[CONTROL.get("RIGHT")] && 1) - (key[CONTROL.get("LEFT")] && 1)) * 20 * 30/FPS);
         if (this.ship.x >= 1000) this.ship.x = 999; 
         if (this.ship.x <= 60) this.ship.x = 61;
-        this.ship.y += int(((key[CONTROL.DOWN] && 1) - (key[CONTROL.UP] && 1)) * 20 * 30/FPS); 
+        this.ship.y += int(((key[CONTROL.get("DOWN")] && 1) - (key[CONTROL.get("UP")] && 1)) * 20 * 30/FPS); 
         if (this.ship.y >= 680) this.ship.y = 679; 
         if (this.ship.y <= 40) this.ship.y = 41;
         
@@ -181,17 +183,17 @@ class SShip {
         }
         
         //missile movement
-        if (key[CONTROL.AUTO] == 1){
-            key[CONTROL.AUTO] = 2;
+        if (key[CONTROL.get("AUTO")] == 1){
+            key[CONTROL.get("AUTO")] = 2;
             this.auto = !this.auto;
         }
     
         //prevent auto and spc at the same time
-        if (this.auto) key[CONTROL.FIRE] = 2;
+        if (this.auto) key[CONTROL.get("FIRE")] = 2;
 
-        if (key[CONTROL.FIRE] == 1 || (this.auto && !(this.missileTmr))){ 
+        if (key[CONTROL.get("FIRE")] == 1 || (this.auto && !(this.missileTmr))){ 
             setMissile();
-            key[CONTROL.FIRE] = 2;      
+            key[CONTROL.get("FIRE")] = 2;      
         }
     
         if (this.ship.muteki % 2 == 0) this.ship.drawObject();
@@ -611,13 +613,31 @@ function drawScore(){
     fText("HISCORE " + hiScore, 600, 50, 40, "yellow");
 }
 
+function drawHiScore(){
+    fText("HISCORE " + hiScore, 600, 50, 40, "yellow");
+}
+
 //x1,y1 : top left, x2,y2 : bottom right
 function isMouseInABox(x1, y1, x2, y2){
     if (tapX > x1 && tapX < x2 && tapY > y1 && tapY < y2) return true;
     return false;
 }
 
-//Interfaces
+//Menus
+
+function scrollMenu(totalMenuItems){
+    if (key[CONTROL.get("UP")] == 1) {
+        menu--;
+        key[CONTROL.get("UP")] = 2;
+    }
+    if (key[CONTROL.get("DOWN")] == 1) {
+        menu++;
+        key[CONTROL.get("DOWN")] = 2;
+    }
+
+    menu = menu % totalMenuItems;
+    menu < 0? menu = totalMenuItems + menu : menu;
+}
 
 //Sliding bar object
 class SlidingBar {
@@ -632,6 +652,7 @@ class SlidingBar {
         this.value = value;
         this.color1 = color1;
         this.color2 = color2;
+        this.dragging = false;
     }
 
     drawBar(){
@@ -644,13 +665,22 @@ class SlidingBar {
     }
 
     dragBar(){
-        
-        this.changeValue((tapX - this.x) / this.length * (this.max-this.min) + this.min);
-        
-        this.value = Math.round(this.value/this.step)*this.step;
-        
-        if (this.value < this.min) this.value = this.min;
-        else if (this.value > this.max) this.value = this.max; 
+
+        if (fpsBar.dragging || (tapC && fpsBar.isPointing())) {
+            this.dragging = true;
+            if (!tapC) {
+                this.dragging = false;
+                return;
+            }
+
+            this.changeValue((tapX - this.x) / this.length * (this.max-this.min) + this.min);
+            
+            this.value = Math.round(this.value/this.step)*this.step;
+            
+            if (this.value < this.min) this.value = this.min;
+            else if (this.value > this.max) this.value = this.max; 
+        }
+
     }
     
     changeValue(v){
@@ -668,6 +698,10 @@ class SlidingBar {
     getValue(){
         return this.value;
     }
+
+    isPointing(){
+        return isMouseInABox(this.x,this.y,this.x+this.length,this.y+this.height);
+    }
 }
 
 //Box Button Object
@@ -675,7 +709,6 @@ const SELECTED = true;
 class BoxButton {
     constructor(x,y,length,width,fontSize = 40 ,text = " sample",textColor = "white" ,boxColor = "black", boxAlpha = 70, clickFunction = function(){}){
         this.clickFunction = clickFunction;
-
         this.x = x;
         this.y = y;
         this.length = length;
@@ -709,8 +742,8 @@ class BoxButton {
 
 //Buttons
 const playButtonFunction = function(){
-    key[CONTROL.FIRE] = 0;
-    key[CONTROL.SELECT] = 0;
+    key[CONTROL.get("FIRE")] = 0;
+    key[CONTROL.get("SELECT")] = 0;
     tapC = 0;
     initSShip();
     initObject();
@@ -722,32 +755,25 @@ const playButtonFunction = function(){
     score = 0;
     menu = 0;
 }
-var playButton = new BoxButton(500, 375, 200, 50, 40, "Play", "cyan", "purple", 70, playButtonFunction);
+var playButton = new BoxButton(500, 375, 200, 50, 40, "PLAY", "cyan", "purple", 70, playButtonFunction);
 
 const settingButtonFunction = function(){
-    key[CONTROL.FIRE] = 0;
-    key[CONTROL.SELECT] = 0;
+    key[CONTROL.get("FIRE")] = 0;
+    key[CONTROL.get("SELECT")] = 0;
     tapC = 0;
     menu = 0;
     scene = Scene.SETTING;
 }
-var settingButton = new BoxButton(500, 475, 200, 50, 40, "Setting", "cyan", "purple", 70, settingButtonFunction);
+var settingButton = new BoxButton(500, 475, 200, 50, 40, "SETTING", "cyan", "purple", 70, settingButtonFunction);
 
 //Console
 function mainMenu(){
+    drawHiScore();
+    if (tmr % int(FPS*4/3) < int(FPS*2/3))fText("Press [Enter] or Click to select.", 600, 600, 40, "cyan");
     drawImg(13, 200, 100);
 
-    if (key[CONTROL.UP] == 1) {
-        menu--;
-        key[CONTROL.UP] = 2;
-    }
-    if (key[CONTROL.DOWN] == 1) {
-        menu++;
-        key[CONTROL.DOWN] = 2;
-    }
-
-    menu = menu % 2;
-    menu < 0? menu=2+menu : menu;
+    const totalMenuItems = 2;
+    scrollMenu(totalMenuItems);
 
     if (playButton.isPointing()) menu = 0;
     else if (settingButton.isPointing()) menu = 1;
@@ -756,68 +782,64 @@ function mainMenu(){
     settingButton.drawButton(menu==1?SELECTED:!SELECTED);
     
     if (menu == 0) {
-        if (key[CONTROL.FIRE] == 1 || key[CONTROL.SELECT] == 1 || (tapC == 1 && isMouseInABox(500, 350, 700, 450))){
+        if (key[CONTROL.get("FIRE")] == 1 || key[CONTROL.get("SELECT")] == 1 || (tapC == 1 && playButton.isPointing())){
             playButton.onClick();
         }
     }
     else if (menu == 1) {
-        if (key[CONTROL.FIRE] == 1 || key[CONTROL.SELECT] == 1 || (tapC == 1 && isMouseInABox(500, 450, 700, 550))){
+        if (key[CONTROL.get("FIRE")] == 1 || key[CONTROL.get("SELECT")] == 1 || (tapC == 1 && settingButton.isPointing())){
             settingButton.onClick();
         }
     }
     
 }
 
+
+
+
 //Setting Menu
 
 //fps drag bar
-var fpsBar = new SlidingBar(312, 440, 576, 40, 30, 144, 1, FPS);
+var fpsBar = new SlidingBar(312, 340, 576, 40, 30, 144, 1, FPS);
 
 //fps button
-var fpsButton = new BoxButton(500,375,200,50,40,"FPS","cyan","purple",70);
+var fpsButton = new BoxButton(500,275,200,50,40,"FPS","cyan","purple",70);
 
 //Keybinds button
 const controlButtonFunction = function(){
-    scene = Scene.KEYBINDS;
-    key[CONTROL.FIRE] = 0;
-    key[CONTROL.SELECT] = 0;
+    scene = Scene.CONTROLS;
+    key[CONTROL.get("FIRE")] = 0;
+    key[CONTROL.get("SELECT")] = 0;
     tapC = 0;
     menu = 0;  
 }
-var controlButton = new BoxButton(500, 500, 200, 50, 40, "Controls","cyan","purple",70, controlButtonFunction);
+var controlButton = new BoxButton(475, 450, 250, 50, 40, "CONTROLS","cyan","purple",70, controlButtonFunction);
 
 //Back button
 const settingBackButtonFunction = function(){
     scene = Scene.TITLE;
-    key[CONTROL.FIRE] = 0;
-    key[CONTROL.SELECT] = 0;
+    key[CONTROL.get("FIRE")] = 0;
+    key[CONTROL.get("SELECT")] = 0;
+    key[CONTROL.get("BACK")] = 0;
     tapC = 0;
     menu = 0;
 }
-var settingBackButton = new BoxButton(50, 625, 100, 50, 40, "Back","cyan","purple",70, settingBackButtonFunction);
+var settingBackButton = new BoxButton(50, 625, 300, 50, 40, "BACK[ESC]","cyan","purple",70, settingBackButtonFunction);
 
 var dragging = false;
 var BarCD = 1 * (FPS/30);
 
 function settingMenu(){
-    drawImg(13, 200, 100);
-    if (!tapC) dragging = false; 
-    
-    if (key[CONTROL.UP] == 1) {
-        menu--;
-        key[CONTROL.UP] = 2;
-    }
-    if (key[CONTROL.DOWN] == 1) {
-        menu++;
-        key[CONTROL.DOWN] = 2;
-    }
+    fText("SETTING", 600, 50, 40, "yellow")
+    //drawImg(13, 200, 100);
 
-    menu = menu % 3;
-    menu < 0? menu=3+menu : menu;
+    const totalMenuItems = 3;
+    
+    scrollMenu(totalMenuItems);
 
     //console.log(menu);
 
-    if (key[CONTROL.LEFT] || key[CONTROL.RIGHT] || fpsButton.isPointing()) menu = 0;
+    if (key[CONTROL.get("LEFT")] || key[CONTROL.get("RIGHT")] || fpsButton.isPointing()) menu = 0;
     else if (controlButton.isPointing()) menu = 1;
     else if (settingBackButton.isPointing()) menu = 2;
     
@@ -826,33 +848,216 @@ function settingMenu(){
     settingBackButton.drawButton(menu == 2? SELECTED:!SELECTED);
 
     //keyboard <- / -> change fps
-    if (key[CONTROL.LEFT] && (tmr % BarCD == 0)) fpsBar.changeValue(--FPS);
-    if (key[CONTROL.RIGHT] && (tmr % BarCD == 0)) fpsBar.changeValue(++FPS);
+    if (key[CONTROL.get("LEFT")] && (tmr % BarCD == 0)) fpsBar.changeValue(--FPS);
+    if (key[CONTROL.get("RIGHT")] && (tmr % BarCD == 0)) fpsBar.changeValue(++FPS);
     
-    if (dragging || (tapC && isMouseInABox(312, 440, 312+576, 440+40))) {
-        menu = 0;
-        fpsBar.dragBar();
-        dragging = true;
+    fpsBar.dragBar();
+    if (fpsBar.dragging) {
+        menu = 0; 
     }   
     fpsBar.drawBar();
+    FPS = fpsBar.getValue();
     
     
     if (menu == 1) {
-        if (key[CONTROL.SELECT] == 1|| key[CONTROL.FIRE] == 1 || (tapC && isMouseInABox(500, 475, 700, 575))){
+        if (key[CONTROL.get("SELECT")] == 1|| key[CONTROL.get("FIRE")] == 1 || (tapC && controlButton.isPointing())){
             controlButton.onClick();
         }
-    }else if (menu == 2) {
-        if (key[CONTROL.SELECT] == 1|| key[CONTROL.FIRE] == 1 || (tapC && isMouseInABox(25, 625, 175, 675))){
+    }
+    if (menu == 2|| key[CONTROL.get("BACK")] == 1) {
+        if (key[CONTROL.get("SELECT")] == 1|| key[CONTROL.get("FIRE")] == 1 || key[CONTROL.get("BACK")] == 1|| (tapC && settingBackButton.isPointing())){
             settingBackButton.onClick();
         }
     }
     
     
-    FPS = fpsBar.getValue();
 }
 
-function keybindsMenu(){
+//Controls menu
 
+//Back Button
+const controlsBackButtonFunction = function(){
+    scene = Scene.SETTING;
+    key[CONTROL.get("FIRE")] = 0;
+    key[CONTROL.get("SELECT")] = 0;
+    key[CONTROL.get("BACK")] = 0;
+    tapC = 0;
+    menu = 0;
+}
+var controlsBackButton = new BoxButton(50, 625, 300, 50, 40, "BACK[ESC]","cyan","purple",70, controlsBackButtonFunction);
+
+//Up key
+
+var upButton = new BoxButton(100,100,200,50,40,"UP","cyan","purple",70);
+
+var modifyUpButton = new BoxButton(350,100,250,50,40,"ArrowUp","white","purple",70);
+
+//down key
+
+var downButton = new BoxButton(100,230,200,50,40,"DOWN","cyan","purple",70);
+
+var modifyDownButton = new BoxButton(350,230,250,50,40,"ArrowDown","white","purple",70);
+
+//left key
+
+
+var leftButton = new BoxButton(100,360,200,50,40,"LEFT","cyan","purple",70);
+
+var modifyLeftButton = new BoxButton(350,360,250,50,40,"ArrowLeft","white","purple",70);
+
+//right key
+
+var rightButton = new BoxButton(100,490,200,50,40,"RIGHT","cyan","purple",70);
+
+var modifyRightButton = new BoxButton(350,490,250,50,40,"ArrowRight","white","purple",70);
+
+//fire key
+
+var fireButton = new BoxButton(600,100,200,50,40,"FIRE","cyan","purple",70);
+
+var modifyFireButton = new BoxButton(850,100,250,50,40,"[Space]","white","purple",70);
+
+//auto key
+
+var autoButton = new BoxButton(600,230,200,50,40,"AUTO","cyan","purple",70);
+
+var modifyAutoButton = new BoxButton(850,230,250,50,40,"a","white","purple",70);
+
+//select key
+
+var selectButton = new BoxButton(600,360,200,50,40,"SELECT","cyan","purple",70);
+
+var modifySelectButton = new BoxButton(850,360,250,50,40,"Enter","white","purple",70);
+
+//Find the unicode of the key pressed
+var changeKey = 0; 
+window.addEventListener("keydown", changeControl);
+function changeControl(e){
+    changeKey = e.key;
+    if (e.keyCode == 32) changeKey = "[Space]";
+}
+
+//check if the key setting is repeated
+function checkRepeatKey(){ //***TODO***
+
+}
+
+var subMenu = -1;
+function controlsMenu(){
+
+    fText("CONTROLS", 600,50,40,"yellow");
+    console.log(changeKey);
+    const totalMenuItems = 8;
+
+    if (subMenu == -1){
+        scrollMenu(totalMenuItems);
+
+        if (upButton.isPointing()) menu = 0;
+        else if (downButton.isPointing()) menu = 1;
+        else if (leftButton.isPointing()) menu = 2;
+        else if (rightButton.isPointing()) menu = 3;
+        else if (fireButton.isPointing()) menu = 4;
+        else if (autoButton.isPointing()) menu = 5;
+        else if (selectButton.isPointing()) menu = 6;
+        else if (controlsBackButton.isPointing()) menu = totalMenuItems-1;
+    }
+
+    upButton.drawButton(menu == 0? SELECTED:!SELECTED);
+    downButton.drawButton(menu == 1? SELECTED:!SELECTED);
+    leftButton.drawButton(menu == 2? SELECTED:!SELECTED);
+    rightButton.drawButton(menu == 3? SELECTED:!SELECTED);
+    fireButton.drawButton(menu == 4? SELECTED:!SELECTED);
+    autoButton.drawButton(menu == 5? SELECTED:!SELECTED);
+    selectButton.drawButton(menu == 6? SELECTED:!SELECTED);
+    controlsBackButton.drawButton(menu == totalMenuItems-1? SELECTED:!SELECTED);
+    
+    modifyUpButton.drawButton(subMenu == 0? SELECTED:!SELECTED);
+    modifyDownButton.drawButton(subMenu == 1? SELECTED:!SELECTED);
+    modifyLeftButton.drawButton(subMenu == 2? SELECTED:!SELECTED);
+    modifyRightButton.drawButton(subMenu == 3? SELECTED:!SELECTED);
+    modifyFireButton.drawButton(subMenu == 4? SELECTED:!SELECTED);
+    modifyAutoButton.drawButton(subMenu == 5? SELECTED:!SELECTED);
+    modifySelectButton.drawButton(subMenu == 6? SELECTED:!SELECTED);
+
+
+    if (menu < totalMenuItems-1 && subMenu == -1){
+        if (key[CONTROL.get("SELECT")] == 1 || key[CONTROL.get("FIRE")] == 1 ){
+            key[CONTROL.get("SELECT")] = 2;
+            key[CONTROL.get("FIRE")] = 2;
+            subMenu = menu;       
+        }
+        else if (tapC && upButton.isPointing()) subMenu = 0;
+        else if (tapC && downButton.isPointing()) subMenu = 1;
+        else if (tapC && leftButton.isPointing()) subMenu = 2;
+        else if (tapC && rightButton.isPointing()) subMenu = 3;
+        else if (tapC && fireButton.isPointing()) subMenu = 4;
+        else if (tapC && autoButton.isPointing()) subMenu = 5;
+        else if (tapC && selectButton.isPointing()) subMenu = 6;
+    }
+
+    //Back button
+    if ((menu == totalMenuItems-1 || key[CONTROL.get("BACK")] == 1) && subMenu == -1) {
+        if (key[CONTROL.get("SELECT")] == 1|| key[CONTROL.get("FIRE")] == 1 || key[CONTROL.get("BACK")] == 1 || (tapC && controlsBackButton.isPointing())){
+            controlsBackButton.onClick();
+        }
+    }
+    
+    //subMenu handle (change the key setting)
+    if (subMenu > -1 && key[CONTROL.get("BACK")]){
+        key[CONTROL.get("BACK")] = 2;
+        subMenu = -1;
+    }
+    else if (subMenu == 0){ //UP
+        if (key[inkey] == 1){
+            CONTROL.get("UP") = inkey;
+            modifyUpButton.text = changeKey;
+        }
+        key[inkey] = 2;
+    }
+    else if (subMenu == 1){ //DOWN
+        if (key[inkey] == 1){
+            CONTROL.get("DOWN") = inkey;
+            modifyDownButton.text = changeKey;
+        }
+        key[inkey] = 2;
+    }
+    else if (subMenu == 2){ //LEFT
+        if (key[inkey] == 1){
+            CONTROL.get("LEFT") = inkey;
+            modifyLeftButton.text = changeKey;
+        }
+        key[inkey] = 2;
+    }
+    else if (subMenu == 3){ //RIGHT
+        if (key[inkey] == 1){
+            CONTROL.get("RIGHT") = inkey;
+            modifyRightButton.text = changeKey;
+        }
+        key[inkey] = 2;
+    }
+    else if (subMenu == 4){ //FIRE
+        if (key[inkey] == 1){
+            CONTROL.get("FIRE") = inkey;
+            modifyFireButton.text = changeKey;
+        }
+        key[inkey] = 2;
+    }
+    else if (subMenu == 5){ //AUTO
+        if (key[inkey] == 1){
+            CONTROL.get("AUTO") = inkey;
+            modifyAutoButton.text = changeKey;
+        }
+        key[inkey] = 2;
+    }
+    else if (subMenu == 6){ //SELECT
+        if (key[inkey] == 1){
+            CONTROL.get("SELECT") = inkey;
+            modifySelectButton.text = changeKey;
+        }
+        key[inkey] = 2;
+    }
+
+    if (subMenu > -1) checkRepeatKey();
 }
 
 
