@@ -29,7 +29,19 @@ CONTROL.set('SELECT', 13);
 CONTROL.set('BACK', 27);
 CONTROL.set('PAUSE', 27);
 
+const OccupiedKey = new Map();
+
+OccupiedKey.set(38, 'UP');
+OccupiedKey.set(40, 'DOWN');
+OccupiedKey.set(37, 'LEFT');
+OccupiedKey.set(39, 'RIGHT');
+OccupiedKey.set(32, 'FIRE');
+OccupiedKey.set(65, 'AUTO');
+OccupiedKey.set(13, 'SELECT');
+OccupiedKey.set(27, 'BACK');
+
 var FPS = 75;
+
 const Scene = Object.freeze({
     TITLE: 0,
     STAGE: 1,
@@ -37,13 +49,14 @@ const Scene = Object.freeze({
     SETTING: 114,
     CONTROLS: 514,
 });
-const AUTO_MISSILE_CD = int(5 * FPS/30);
-const IFRAME = int(30 * FPS/30);
+
 const MAX_SHIP_ENERGY = 10;
-const ENEMY_IFRAME = int(1 * FPS/30);
+var AUTO_MISSILE_CD = int(5 * FPS/30); 
+var IFRAME = int(30 * FPS/30);
+var ENEMY_IFRAME = int(1 * FPS/30);
 
 var tmr = 0;
-var scene = Scene.CONTROLS;
+var scene = Scene.TITLE;
 var stage = 1;
 var score = 0;
 var hiScore = 0;
@@ -61,7 +74,6 @@ function mainloop(){
 
 
         case Scene.STAGE:
-            drawScore();
             gameoverCheck();
             moveSShip();
             moveObjects();
@@ -70,9 +82,11 @@ function mainloop(){
             setItems();
             hitCheck();
             autoHandle();
+            drawScore();
             lifeGaugeHandle();
             drawEffects();
             stageHandle();
+            quitGame();
 
             //console.log("tmr = ", tmr);
 
@@ -517,6 +531,8 @@ function getShipLocation(){
     return [sShip.ship.x, sShip.ship.y];
 }
 
+
+//
 function hitCheck(){
     for (var i = 0; i < MAX_ENEMIES; i++){
         if (!(enemies.enemies[i])) continue;
@@ -617,13 +633,18 @@ function drawHiScore(){
     fText("HISCORE " + hiScore, 600, 50, 40, "yellow");
 }
 
+function quitGame(){
+    if (key[CONTROL.get("PAUSE")]) scene = Scene.TITLE;
+}
+
 //x1,y1 : top left, x2,y2 : bottom right
 function isMouseInABox(x1, y1, x2, y2){
     if (tapX > x1 && tapX < x2 && tapY > y1 && tapY < y2) return true;
     return false;
 }
 
-//Menus
+
+//*****USER MENUS*****
 
 function scrollMenu(totalMenuItems){
     if (key[CONTROL.get("UP")] == 1) {
@@ -829,6 +850,7 @@ var settingBackButton = new BoxButton(50, 625, 300, 50, 40, "BACK[ESC]","cyan","
 var dragging = false;
 var BarCD = 1 * (FPS/30);
 
+//Setting Menu
 function settingMenu(){
     fText("SETTING", 600, 50, 40, "yellow")
     //drawImg(13, 200, 100);
@@ -857,6 +879,9 @@ function settingMenu(){
     }   
     fpsBar.drawBar();
     FPS = fpsBar.getValue();
+    AUTO_MISSILE_CD = int(5 * FPS/30); 
+    IFRAME = int(30 * FPS/30);
+    ENEMY_IFRAME = int(1 * FPS/30);
     
     
     if (menu == 1) {
@@ -874,6 +899,7 @@ function settingMenu(){
 }
 
 //Controls menu
+
 
 //Back Button
 const controlsBackButtonFunction = function(){
@@ -929,6 +955,16 @@ var selectButton = new BoxButton(600,360,200,50,40,"SELECT","cyan","purple",70);
 
 var modifySelectButton = new BoxButton(850,360,250,50,40,"Enter","white","purple",70);
 
+const key2button = new Map();
+
+key2button.set("UP", modifyUpButton);
+key2button.set("DOWN", modifyDownButton);
+key2button.set("LEFT", modifyLeftButton);
+key2button.set("RIGHT", modifyRightButton);
+key2button.set("FIRE", modifyFireButton);
+key2button.set("AUTO", modifyAutoButton);
+key2button.set("SELECT", modifySelectButton);
+
 //Find the unicode of the key pressed
 var changeKey = 0; 
 window.addEventListener("keydown", changeControl);
@@ -937,16 +973,53 @@ function changeControl(e){
     if (e.keyCode == 32) changeKey = "[Space]";
 }
 
-//check if the key setting is repeated
-function checkRepeatKey(){ //***TODO***
+var otherKey = 0;
+var subMenu = -1;
+
+function checkRepeatKey(){
+    const iterator = key2button.values();
+    for (var i = 0; i < key2button.size; i++){
+        iterator.next().value.textColor = "white";
+    }
+
+    if (OccupiedKey.has(inkey)) {
+        var button = key2button.get(OccupiedKey.get(inkey));
+        button.textColor = "red";
+    }
+}
+
+//change key setting
+function modifyKey(mod, button){//***TODO***
+    if (key[CONTROL.get("BACK")] ){
+        if (OccupiedKey.has(otherKey) && OccupiedKey.get(otherKey) != mod) return;
+        if (otherKey != 0){
+            OccupiedKey.delete(CONTROL.get(mod));
+            OccupiedKey.set(otherKey, mod);
+            CONTROL.set(mod, otherKey);
+        }
+        key[CONTROL.get("BACK")] = 2;
+        otherKey = 0;
+        subMenu = -1;
+    }
+    
+    if (key[inkey] == 1){
+        otherKey = inkey;
+        button.text = changeKey;
+        checkRepeatKey();
+        if (OccupiedKey.has(inkey) && OccupiedKey.get(inkey) != mod) button.textColor = "red";
+        else button.textColor = "white";
+    }
+    key[inkey] = 2;
+    //console.log(inkey);
+    console.log(key[inkey]);
+    
 
 }
 
-var subMenu = -1;
 function controlsMenu(){
 
     fText("CONTROLS", 600,50,40,"yellow");
-    console.log(changeKey);
+    //console.log(changeKey);
     const totalMenuItems = 8;
 
     if (subMenu == -1){
@@ -1003,61 +1076,29 @@ function controlsMenu(){
     }
     
     //subMenu handle (change the key setting)
-    if (subMenu > -1 && key[CONTROL.get("BACK")]){
-        key[CONTROL.get("BACK")] = 2;
-        subMenu = -1;
-    }
-    else if (subMenu == 0){ //UP
-        if (key[inkey] == 1){
-            CONTROL.get("UP") = inkey;
-            modifyUpButton.text = changeKey;
-        }
-        key[inkey] = 2;
+
+    if (subMenu == 0){ //UP
+        modifyKey("UP", modifyUpButton);
     }
     else if (subMenu == 1){ //DOWN
-        if (key[inkey] == 1){
-            CONTROL.get("DOWN") = inkey;
-            modifyDownButton.text = changeKey;
-        }
-        key[inkey] = 2;
+        modifyKey("DOWN", modifyDownButton);
     }
     else if (subMenu == 2){ //LEFT
-        if (key[inkey] == 1){
-            CONTROL.get("LEFT") = inkey;
-            modifyLeftButton.text = changeKey;
-        }
-        key[inkey] = 2;
+        modifyKey("LEFT", modifyLeftButton);
     }
     else if (subMenu == 3){ //RIGHT
-        if (key[inkey] == 1){
-            CONTROL.get("RIGHT") = inkey;
-            modifyRightButton.text = changeKey;
-        }
-        key[inkey] = 2;
+        modifyKey("RIGHT", modifyRightButton);
     }
     else if (subMenu == 4){ //FIRE
-        if (key[inkey] == 1){
-            CONTROL.get("FIRE") = inkey;
-            modifyFireButton.text = changeKey;
-        }
-        key[inkey] = 2;
+        modifyKey("FIRE", modifyFireButton);
     }
     else if (subMenu == 5){ //AUTO
-        if (key[inkey] == 1){
-            CONTROL.get("AUTO") = inkey;
-            modifyAutoButton.text = changeKey;
-        }
-        key[inkey] = 2;
+        modifyKey("AUTO", modifyAutoButton);
     }
     else if (subMenu == 6){ //SELECT
-        if (key[inkey] == 1){
-            CONTROL.get("SELECT") = inkey;
-            modifySelectButton.text = changeKey;
-        }
-        key[inkey] = 2;
+        modifyKey("SELECT", modifySelectButton);
     }
 
-    if (subMenu > -1) checkRepeatKey();
 }
 
 
