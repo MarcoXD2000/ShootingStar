@@ -13,10 +13,10 @@ Add support on adjustable FPS
 
 # 0.1.0 (2024.11.02)
 ---The menu update---
--Reworked the main menu
--Added setting menu
-    -Sliding bar to change fps
-    -Menu to change control settings
+- Reworked the main menu
+- Added setting menu
+    - Sliding bar to change fps
+    - Menu to change control settings
 
 
 ***TODO
