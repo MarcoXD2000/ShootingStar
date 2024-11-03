@@ -27,3 +27,4 @@ Enemy from the screen
 Display of ammo
 Boss
 Enemy AI
+UI Opacity setting
