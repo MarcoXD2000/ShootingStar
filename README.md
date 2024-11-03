@@ -18,6 +18,17 @@ Add support on adjustable FPS
     - Sliding bar to change fps
     - Menu to change control settings
 
+# 0.1.1 (2024.11.03)
+---The UI update---
+- Reworked the game UI
+    - Added UI to show the status of power-up items
+    - Added Pause Button
+    - Moved Auto-fire button
+- Added pause menu
+- Added UI-Opacity setting 
+- Game Mechanic change
+    - The maximun number of extra missiles is equals to the current health.
+
 
 ***TODO
 Long Laser
@@ -27,3 +38,4 @@ Enemy from the screen
 Display of ammo
 Boss
 Enemy AI
+UI Opacity setting
