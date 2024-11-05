@@ -65,12 +65,12 @@ var menu = 0;
 var uiOpacity = 80;
 
 function mainloop(){
-    tmr++;
     drawBG(1);
     setFPS(FPS);
     
     switch (scene) {
         case SCENE.TITLE:
+            tmr++;
             mainMenu();
             break;
 
@@ -78,6 +78,7 @@ function mainloop(){
             pauseMenu();
             break;
         case SCENE.STAGE:
+            tmr++;
             pauseGame();
             gameoverCheck();
             gameUI(); 
@@ -94,6 +95,7 @@ function mainloop(){
             break;
 
         case SCENE.GAMEOVER:
+            tmr++;
             drawScore();
             const [x,y] = getShipLocation();
             if (tmr > FPS*5) {scene = SCENE.TITLE; stage = -999}
@@ -628,6 +630,7 @@ function gameoverCheck(){
 }
 
 function stageHandle(){
+    if (scene == SCENE.SETTING) return;
     if (tmr < FPS*4) fText("STAGE " + stage, 600, 300, 50, "cyan");
     if (tmr > FPS*114 && tmr < FPS*118) fText("STAGE CLEAR", 600, 300, 50, "cyan");
     if (tmr == FPS * 120) {
@@ -926,16 +929,17 @@ const settingBackButtonFunction = function(){
     tapC = 0;
     menu = 0;
 }
-var settingBackButton = new BoxButton(50, 625, 300, 50, 40, "BACK[ESC]","cyan","purple",70, settingBackButtonFunction);
+var settingBackButton = new BoxButton(475, 625, 250, 50, 40, "BACK[ESC]","cyan","purple",70, settingBackButtonFunction);
 
 var dragging = false;
 var BarCD = 2 * (FPS/30);
-
+var settingtmr = 0;
 //Setting Menu
 function settingMenu(){
+    settingtmr++;
     fpsBar.active = true;
     if (stage > 0) fpsBar.active = false;
-    fText("SETTING", 600, 50, 40, "yellow")
+    if (menu != 1) fText("SETTING", 600, 50, 40, "yellow")
     //drawImg(13, 200, 100);
 
     const totalMenuItems = 4;
@@ -948,6 +952,8 @@ function settingMenu(){
     else if (uiButton.isPointing()) menu = 1;
     else if (controlButton.isPointing()) menu = 2;
     else if (settingBackButton.isPointing()) menu = totalMenuItems-1;
+
+    if (menu == 1) gameUI();
     
     fpsButton.drawButton(menu == 0? SELECTED:!SELECTED);
     uiButton.drawButton(menu == 1? SELECTED:!SELECTED);
@@ -956,8 +962,8 @@ function settingMenu(){
 
     //keyboard <- / -> change fps
     if (menu == 0){
-        if (key[CONTROL.get("LEFT")] && (tmr % BarCD == 0)) fpsBar.changeValue(fpsBar.getValue() - 1);
-        if (key[CONTROL.get("RIGHT")] && (tmr % BarCD == 0)) fpsBar.changeValue(fpsBar.getValue() - 1);
+        if (key[CONTROL.get("LEFT")] && ((settingtmr % BarCD) == 0)) fpsBar.changeValue(fpsBar.getValue() - 1);
+        if (key[CONTROL.get("RIGHT")] && ((settingtmr % BarCD) == 0)) fpsBar.changeValue(fpsBar.getValue() + 1);
     }
     
     fpsBar.dragBar();
@@ -972,8 +978,8 @@ function settingMenu(){
     
     //keyboard <- / -> change ui opacity
     if (menu == 1) {
-        if (key[CONTROL.get("LEFT")] && (tmr % BarCD == 0)) uiBar.changeValue(--uiOpacity);
-        if (key[CONTROL.get("RIGHT")] && (tmr % BarCD == 0)) uiBar.changeValue(++uiOpacity);
+        if (key[CONTROL.get("LEFT")] && (settingtmr % BarCD == 0)) uiBar.changeValue(--uiOpacity);
+        if (key[CONTROL.get("RIGHT")] && (settingtmr % BarCD == 0)) uiBar.changeValue(++uiOpacity);
     }
 
     uiBar.dragBar();
@@ -999,6 +1005,9 @@ function settingMenu(){
     
 }
 
+
+
+
 //Controls menu
 
 
@@ -1011,7 +1020,7 @@ const controlsBackButtonFunction = function(){
     tapC = 0;
     menu = 0;
 }
-var controlsBackButton = new BoxButton(50, 625, 300, 50, 40, "BACK[ESC]","cyan","purple",70, controlsBackButtonFunction);
+var controlsBackButton = new BoxButton(475, 625, 250, 50, 40, "BACK[ESC]","cyan","purple",70, controlsBackButtonFunction);
 
 //Up key
 
@@ -1124,6 +1133,14 @@ function controlsMenu(){
     const totalMenuItems = 8;
 
     if (subMenu == -1){
+        if (key[CONTROL.get("LEFT")] == 1) {
+            menu-=4;
+            key[CONTROL.get("LEFT")] = 2;
+        }
+        if (key[CONTROL.get("RIGHT")] == 1) {
+            menu+=4;
+            key[CONTROL.get("RIGHT")] = 2;
+        }
         scrollMenu(totalMenuItems);
 
         if (upButton.isPointing()) menu = 0;
@@ -1233,7 +1250,6 @@ const pauseSettingButtonFunction = function(){
 var pauseSettingButton = new BoxButton(400,375,400,50,40,"SETTING","cyan","purple",70,pauseSettingButtonFunction);
 
 function pauseMenu(){
-    tmr--;
     if (key[CONTROL.get("PAUSE")] == 1){ 
         scene = SCENE.STAGE;
         key[CONTROL.get("PAUSE")] = 2;

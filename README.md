@@ -29,13 +29,14 @@ Add support on adjustable FPS
 - Game Mechanic change
     - The maximun number of extra missiles is equals to the current health.
 
+# 0.1.2
+- Fixed bugs caused by timer running in the setting menu when the game is paused
+
 
 ***TODO
 Long Laser
 Enemy from the back
 Energy and max number of missile
 Enemy from the screen
-Display of ammo
 Boss
 Enemy AI
-UI Opacity setting
