@@ -51,7 +51,7 @@ const SCENE = Object.freeze({
 });
 
 var FPS = 60;
-const MAX_SHIP_ENERGY = 10;
+var MAX_SHIP_ENERGY = 10;
 var AUTO_MISSILE_CD = int(5 * FPS/30); 
 var IFRAME = int(30 * FPS/30);
 var ENEMY_IFRAME = int(1 * FPS/30);
@@ -333,6 +333,14 @@ class Explosions{
 //敵をセットする
 const MAX_ENEMIES = 100;
 
+const ENEMIES = new Map();
+
+ENEMIES.set("BULLET",4);
+ENEMIES.set("WING",5);
+ENEMIES.set("BALL",6);
+ENEMIES.set("HOPPER",7);
+ENEMIES.set("BLOCK",8);
+
 class Enemies {
     constructor(){
         this.enemies = new Array(MAX_ENEMIES);
@@ -427,9 +435,15 @@ class Enemies {
     }
 }
 
-const MAX_ITEMS = 100
 
 //アイテムをセットする
+const MAX_ITEMS = 100
+
+const ITEMS = new Map();
+ITEMS.set("ENERGY",9);
+ITEMS.set("MISSILE",10);
+ITEMS.set("LASER",11);
+ 
 class Items { // *****TODO*****
     constructor(){
         this.items = new Array(MAX_ITEMS);
@@ -502,7 +516,34 @@ function setEnemies(){
 }
 
 function setItems(){
-    if (tmr % (12*FPS) == 0) items.setItems(1300, 60 + rnd(600), -10, 0, rnd(3) + 9);
+    if (tmr % (12*FPS) == 0) {
+        var itemProbability = new Map();
+        var energyLoss = MAX_SHIP_ENERGY - getEnergy();
+        itemProbability.set("ENERGY", 33 + energyLoss*2);
+        itemProbability.set("MISSILE", 33 - energyLoss);
+        itemProbability.set("LASER", 33 - energyLoss);
+        //^Add new items here^
+        itemProbability.values().forEach((v) => console.log("prob: " + v));
+
+        //sum of the total probability of items
+        var sumOfProbability = 0;
+        itemProbability.values().forEach((v) => sumOfProbability += v);
+            
+        var rand = rnd(sumOfProbability) + 1;
+        console.log("original = " + rand);
+        //select a random item to set based on the probability
+        const spawnItem = function(v){
+            if (itemProbability.get(v)<rand) {
+                rand = rand-itemProbability.get(v);
+            }
+            else {
+                items.setItems(1300, 60 + rnd(600), -10, 0, ITEMS.get(v));
+                rand += sumOfProbability * 999;
+            }
+        }
+        itemProbability.keys().forEach((v) => spawnItem(v));
+    }
+
 }
 
 function setMissile(){
