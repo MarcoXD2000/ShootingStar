@@ -29,8 +29,15 @@ Add support on adjustable FPS
 - Game Mechanic change
     - The maximun number of extra missiles is equals to the current health.
 
-# 0.1.2
+# 1.0.0
+- Revised the code
 - Fixed bugs caused by timer running in the setting menu when the game is paused
+- Implemented adjustable and expandable item spawn probability list.
+
+
+
+
+***Next Update: Weapon Update
 
 
 ***TODO
