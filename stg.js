@@ -192,7 +192,7 @@ class SShip {
         this.auto = false;
         this.missileTmr = 0;
         this.dragging = false;
-        this.currentWeapon = WEAPONS.PLASMABALL;
+        this.currentWeapon = WEAPONS.MISSILE;
     }
 
     moveSShip(){
@@ -222,7 +222,7 @@ class SShip {
         if (this.auto) key[CONTROL.get("FIRE")] = 2;
 
         if (key[CONTROL.get("FIRE")] == 1 || (this.auto && !(this.missileTmr))){ 
-            setMissile(this.currentWeapon);
+            setWeapon(this.currentWeapon);
             key[CONTROL.get("FIRE")] = 2;      
         }
     
@@ -239,7 +239,6 @@ var sShip = new SShip(400,360);
 
 
 //自機が撃つ弾の管理
-const MAX_MISSILES = 1000;
 
 
 //Moving track of different types of weapon
@@ -267,66 +266,90 @@ WeaponFrame.set(WEAPONS.MISSILE, 1);
 WeaponFrame.set(WEAPONS.LASER, 1);
 WeaponFrame.set(WEAPONS.PLASMABALL, 4);
 
+const setWeaponFunc = new Map();
+setWeaponFunc.set(WEAPONS.MISSILE, function(){return Missile.createMissiles()});
+setWeaponFunc.set(WEAPONS.LASER, function(){return Missile.createMissiles()});
+setWeaponFunc.set(WEAPONS.PLASMABALL, function(){return new Plasmaball()});
+
+const MAX_WEAPONS = 100;
 class Weapons {
-    
-}
-
-class Missiles {
     constructor(){
-        this.missiles = new Array(MAX_MISSILES);
-        this.numMissiles = 0;
+        this.weapons = new Array(MAX_WEAPONS);
         this.numPowerUp = 0;
-        this.numLaser = 0;
-        for (var i = 0; i < MAX_MISSILES; i++) this.missiles[i] = null;
+        this.numL = 0;
+        this.numWeapons = 0;
+        for (var i = 0; i < MAX_WEAPONS; i++) this.weapons[i] = null;
     }
 
-
-    setMissile(t){
-        var n = this.numPowerUp;
-        var bulletType = t;
-        if (this.numLaser > 0){
-            this.numLaser--;
-            bulletType = 12;
+    setWeapon(weapon){
+        var newWeapons = setWeaponFunc.get(weapon)();
+        for (var i = 0; i < newWeapons.length; i++){
+            this.weapons[this.numWeapons] = newWeapons[i];
+            this.numWeapons = (this.numWeapons + 1) % MAX_WEAPONS;
         }
-        for (var i = 0; i <= n; i++){
-            var frame = WeaponFrame.get(bulletType);
-            var velocity = WeaponVelocity.get(bulletType);
-            this.missiles[this.numMissiles] = new GameObject((sShip.ship.x+40), (sShip.ship.y - n*6 + i*12), velocity[0], int((i-n/2)*2), bulletType, -1, frame);
-            this.missiles[this.numMissiles].frame = rnd(frame);
-            this.numMissiles = (this.numMissiles + 1) % MAX_MISSILES;
-            //console.log("missle set");
+        
+        if (this.numL > 0){ 
+            this.numL--;
+            this.numL==0?sShip.currentWeapon=2:0;
         }
     }
 
-    moveMissile(){
-        for (var i = 0; i < MAX_MISSILES; i++){
-            if (this.missiles[i]){ 
-                const trackFunction = TrackFunctions.get(this.missiles[i].t);
-                const velocity = trackFunction(this.missiles[i].xp, this.missiles[i].yp);
-                this.missiles[i].xp = velocity.next().value;
-                this.missiles[i].yp = velocity.next().value;
-                this.missiles[i].drawObject();
-                //console.log("missle move");
-                if (this.missiles[i].x > 1200) {
-                    this.deleteMissiles(i);
-                }
+    moveWeapon(){
+        for (var i = 0; i < this.weapons.length; i++) {
+            if (this.weapons[i]){
+                this.weapons[i].moveWeapon();
             }
         }
     }
 
-    deleteMissiles(i){
-        if (this.missiles[i]){
-            delete this.missiles[i];
-            this.missiles[i] = null;
-            //console.log("missile deleted");
+    deleteWeapon(i){
+        if (this.weapons[i]){
+            this.weapons.splice(i,1,null);
+        }
+    }
+}
+
+class Missile extends GameObject{
+    constructor(){//set missile
+        var n = weapons.numPowerUp;
+        var i = Missile._row;
+        var currentWeapon = sShip.currentWeapon;
+        var frame = WeaponFrame.get(currentWeapon);
+        var velocity = WeaponVelocity.get(currentWeapon);
+        Missile._row = (Missile._row + 1) % (n+1);
+        super((sShip.ship.x+40), (sShip.ship.y - n*6 + i*12), velocity[0], int((i-n/2)*2), currentWeapon, -1, frame);
+        this.id = weapons.numWeapons;
+    }
+
+    static createMissiles(){
+        var arr = new Array();
+        for (var i = 0; i <= weapons.numPowerUp; i++){
+            arr.push(new Missile());
+        }
+        return arr;
+    }
+
+    moveWeapon(){
+        super.drawObject();
+        if (this.x > 1200) {
+            weapons.deleteWeapon(this.id);
         }
     }
 
-    isLaser(i){
-        if (this.missiles[i].t == 12) return true;
-        return false;
+    static get row(){
+        return this._row;
+    }
+
+    static set row(next){
+        return this._row = next;
+    }
+
+    static {
+        this._row = 0;
     }
 }
+
+
 
 //Turn Extra energies into Beam gauge
 class Destorybeam {//*****TODO*****
@@ -557,16 +580,14 @@ class Items { // *****TODO*****
     }
 }
 
-
-
+var weapons = new Weapons();
 var enemies = new Enemies(); 
-var missiles = new Missiles();
 var explosions = new Explosions();
 var items = new Items();
 
 function initObject(){
+    weapons = new Weapons();
     enemies = new Enemies();
-    missiles = new Missiles();
     explosions = new Explosions();
 }
 
@@ -628,8 +649,9 @@ function setItems(){
 
 }
 
-function setMissile(t){
-    missiles.setMissile(t);
+function setWeapon(t){
+    weapons.setWeapon(t);
+    //console.log("Weapon setted");
 }
 
 function moveObjects(){
@@ -638,7 +660,7 @@ function moveObjects(){
 }
 
 function moveMissile(){
-     missiles.moveMissile();
+     weapons.moveWeapon();
 }
 
 function initSShip(){
@@ -675,14 +697,14 @@ function hitCheck(){
         if (!(enemies.enemies[i])) continue;
 
 
-        //Enemies x Missile
-        for (var j = 0; j < MAX_MISSILES; j++){
+        //Enemies x Weapons
+        for (var j = 0; j < MAX_WEAPONS; j++){
             if (enemies.enemies[i].t == 4) break;
-            if (!(missiles.missiles[j])) continue;
-            if (enemies.enemies[i].hitCheck(missiles.missiles[j], r1,r2)){
+            if (!(weapons.weapons[j])) continue;
+            if (enemies.enemies[i].hitCheck(weapons.weapons[j], r1,r2)){
                 //explosions.setExplosion(enemies.enemies[i].x, enemies.enemies[i].y, 9);
                 enemies.decreaseEnemyLife(i);
-                if(!missiles.isLaser(j)) missiles.deleteMissiles(j);
+                if(weapons.weapons[j].t == 2) weapons.deleteWeapon(j);
                 break;
             }
         }
@@ -696,8 +718,11 @@ function hitCheck(){
         if (items.items[i].hitCheck(sShip.ship, SELF_RADIUS, r)){
             switch (t){
                 case 9:  if (sShip.getEnergy() < MAX_SHIP_ENERGY) sShip.ship.life++; break;
-                case 10: if (missiles.numPowerUp < sShip.getEnergy()) missiles.numPowerUp++; break;
-                case 11: missiles.numLaser += 50; break;
+                case 10: if (weapons.numPowerUp < sShip.getEnergy()) weapons.numPowerUp++; break;
+                case 11: 
+                        weapons.numL += 50; 
+                        sShip.currentWeapon = 12;
+                        break;
             }
             
             items.deleteItems(i);
@@ -774,9 +799,9 @@ function drawHiScore(){
 function showBulletStatus(){
     setAlp(uiOpacity);
     drawImg(10, 70, 560);
-    fTextN("X " + missiles.numPowerUp + "/" + sShip.getEnergy(), 200, 580, 50, 40, "lightblue");
+    fTextN("X " + weapons.numPowerUp + "/" + sShip.getEnergy(), 200, 580, 50, 40, "lightblue");
     drawImg(11, 70, 613);
-    fTextN("X " + missiles.numLaser, 200, 630, 50, 40, "lightblue");
+    fTextN("X " + weapons.numL, 200, 630, 50, 40, "lightblue");
     setAlp(100);
 }  
 
@@ -1379,7 +1404,7 @@ function pauseMenu(){
 
     sShip.ship.drawObjectPause();
     for (var i = 0; i < MAX_ENEMIES; i++) enemies.enemies[i]?enemies.enemies[i].drawObjectPause():0;
-    for (var i = 0; i < MAX_MISSILES; i++) missiles.missiles[i]?missiles.missiles[i].drawObjectPause():0;
+    for (var i = 0; i < MAX_WEAPONS; i++) weapons.weapons[i]?weapons.weapons[i].drawObjectPause():0;
     for (var i = 0; i < MAX_ITEMS; i++) items.items[i]?items.items[i].drawObjectPause():0;
     
     pauseButton();

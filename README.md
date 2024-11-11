@@ -30,9 +30,9 @@ Add support on adjustable FPS
     - The maximun number of extra missiles is equals to the current health.
 
 # 1.0.0
-- Revised the code
 - Fixed bugs caused by timer running in the setting menu when the game is paused
 - Implemented adjustable and expandable item spawn probability list.
+- Reworked the code implementation of the weapon system, the system now supports expandsions of new weapons.
 
 
 
