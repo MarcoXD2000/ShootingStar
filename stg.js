@@ -12,7 +12,9 @@ function setup(){
 
     //new sprites
     loadImg(14, "image/plasmaball3.0.png");
-
+    loadImg(15, "image/Lplasmaball.png");
+    loadImg(16, "image/shock.png");
+    
     initSShip();
     //initMissile();
     initObject();
@@ -49,7 +51,19 @@ const WEAPONS = Object.freeze({
     MISSILE: 2,
     LASER: 12,
     PLASMABALL: 14,
+    LPLASMABALL: 15,
 });
+
+const EFFECTS = Object.freeze({
+    EXPLOSION: 3,
+    SHOCK: 16,
+})
+
+const WeaponEffect = new Map();
+WeaponEffect.set(WEAPONS.PLASMABALL, EFFECTS.SHOCK);
+WeaponEffect.set(WEAPONS.LPLASMABALL, EFFECTS.SHOCK);
+WeaponEffect.set(WEAPONS.MISSILE, EFFECTS.EXPLOSION);
+WeaponEffect.set(WEAPONS.LASER, EFFECTS.EXPLOSION);
 
 const SCENE = Object.freeze({
     TITLE: 0,
@@ -159,9 +173,15 @@ class GameObject {
         this.totalFrame = totalFrame;
         this.frame = 0;
         this.frame_FPS_counter = 0;
+        this.paralyseTmr= 0;
     }
     
     drawObject(){        
+        if (this.paralyseTmr > 0){ 
+            this.drawObjectPause(); 
+            this.paralyseTmr--;
+            return;
+        }
         var frameWidth = img[this.t].width/this.totalFrame;
         var frameHeight = img[this.t].height;
         this.x = this.x + this.xp * 30/FPS;
@@ -192,7 +212,7 @@ class SShip {
         this.auto = false;
         this.missileTmr = 0;
         this.dragging = false;
-        this.currentWeapon = WEAPONS.MISSILE;
+        this.currentWeapon = WEAPONS.PLASMABALL;
     }
 
     moveSShip(){
@@ -241,37 +261,31 @@ var sShip = new SShip(400,360);
 //自機が撃つ弾の管理
 
 
-//Moving track of different types of weapon
-const LinearTrack = function*(xp, yp) {
-    yield xp;
-    yield yp;
-}
-
-
-//function of movement of different weapons
-const TrackFunctions = new Map();
-TrackFunctions.set(WEAPONS.MISSILE, LinearTrack);
-TrackFunctions.set(WEAPONS.LASER, LinearTrack);
-TrackFunctions.set(WEAPONS.PLASMABALL, LinearTrack);
-
 //default x,y velocities of different weapons
 const WeaponVelocity = new Map();
-WeaponVelocity.set(WEAPONS.MISSILE,[40,0]);
-WeaponVelocity.set(WEAPONS.LASER,[40,0]);
-WeaponVelocity.set(WEAPONS.PLASMABALL,[30,0]);
+WeaponVelocity.set(WEAPONS.MISSILE,new vec2d(40,0));
+WeaponVelocity.set(WEAPONS.LASER,new vec2d(40,0));
+WeaponVelocity.set(WEAPONS.PLASMABALL,new vec2d(35,0));
+WeaponVelocity.set(WEAPONS.LPLASMABALL,new vec2d(35,0));
 
 //number of animation frames of different weapons
 const WeaponFrame = new Map();
 WeaponFrame.set(WEAPONS.MISSILE, 1);
 WeaponFrame.set(WEAPONS.LASER, 1);
 WeaponFrame.set(WEAPONS.PLASMABALL, 4);
+WeaponFrame.set(WEAPONS.LPLASMABALL, 4);
+
+const STATUS = Object.freeze({
+    PARALYSE: 0,
+})
 
 const setWeaponFunc = new Map();
 setWeaponFunc.set(WEAPONS.MISSILE, function(){return Missile.createMissiles()});
 setWeaponFunc.set(WEAPONS.LASER, function(){return Missile.createMissiles()});
-setWeaponFunc.set(WEAPONS.PLASMABALL, function(){return new Plasmaball()});
+setWeaponFunc.set(WEAPONS.PLASMABALL, function(){return Plasmaball.createPlasmaball()});
+setWeaponFunc.set(WEAPONS.LPLASMABALL, function(){return Plasmaball.createPlasmaball()});
 
-const MAX_WEAPONS = 100;
+const MAX_WEAPONS = 1000;
 class Weapons {
     constructor(){
         this.weapons = new Array(MAX_WEAPONS);
@@ -282,16 +296,7 @@ class Weapons {
     }
 
     setWeapon(weapon){
-        var newWeapons = setWeaponFunc.get(weapon)();
-        for (var i = 0; i < newWeapons.length; i++){
-            this.weapons[this.numWeapons] = newWeapons[i];
-            this.numWeapons = (this.numWeapons + 1) % MAX_WEAPONS;
-        }
-        
-        if (this.numL > 0){ 
-            this.numL--;
-            this.numL==0?sShip.currentWeapon=2:0;
-        }
+        setWeaponFunc.get(weapon)();
     }
 
     moveWeapon(){
@@ -310,23 +315,26 @@ class Weapons {
 }
 
 class Missile extends GameObject{
-    constructor(){//set missile
+    constructor(i){//set missile
         var n = weapons.numPowerUp;
-        var i = Missile._row;
         var currentWeapon = sShip.currentWeapon;
         var frame = WeaponFrame.get(currentWeapon);
         var velocity = WeaponVelocity.get(currentWeapon);
-        Missile._row = (Missile._row + 1) % (n+1);
-        super((sShip.ship.x+40), (sShip.ship.y - n*6 + i*12), velocity[0], int((i-n/2)*2), currentWeapon, -1, frame);
+        super((sShip.ship.x+40), (sShip.ship.y - n*6 + i*12), velocity.x, int((i-n/2)*2), currentWeapon, -1, frame);
         this.id = weapons.numWeapons;
     }
 
     static createMissiles(){
-        var arr = new Array();
         for (var i = 0; i <= weapons.numPowerUp; i++){
-            arr.push(new Missile());
+            //arr.push(new Missile());
+            weapons.weapons[weapons.numWeapons] = new Missile(i);
+            weapons.numWeapons = (weapons.numWeapons + 1) % MAX_WEAPONS;
         }
-        return arr;
+        
+        if (weapons.numL > 0){ 
+            weapons.numL--;
+            weapons.numL==0?sShip.currentWeapon=2:0;
+        }
     }
 
     moveWeapon(){
@@ -336,20 +344,62 @@ class Missile extends GameObject{
         }
     }
 
-    static get row(){
-        return this._row;
-    }
-
-    static set row(next){
-        return this._row = next;
-    }
-
-    static {
-        this._row = 0;
+    onHit(){
+        if (this.t == WEAPONS.MISSILE) weapons.deleteWeapon(this.id); //delete when the missile is not a laser;
+        return [];
     }
 }
 
 
+//Paralysis enemies
+class Plasmaball extends GameObject{//*****TODO*****
+    constructor(i){//set missile
+        var n = weapons.numPowerUp;
+        var currentWeapon = sShip.currentWeapon;
+        var frame = WeaponFrame.get(currentWeapon);
+        var velocity = WeaponVelocity.get(currentWeapon);
+        velocity = velocity.rotate(8*((i-n/2)*2));
+        super((sShip.ship.x+40), (sShip.ship.y - n*6 + i*12), velocity.x, velocity.y, currentWeapon, -1, frame);
+        this.id = weapons.numWeapons;
+        this.alp = 100;
+        this.sec = FPS * 2;
+    }
+
+    static createPlasmaball(){
+        for (var i = 0; i <= weapons.numPowerUp; i++){
+            //arr.push(new Missile());
+            weapons.weapons[weapons.numWeapons] = new Plasmaball(i);
+            weapons.numWeapons = (weapons.numWeapons + 1) % MAX_WEAPONS;
+        }
+        
+        if (weapons.numL > 0){ 
+            weapons.numL--;
+            weapons.numL==0?sShip.currentWeapon=14:0;
+        }
+    }
+
+    moveWeapon(){
+        this.xp *= Math.pow(0.98, 60/FPS);
+        this.yp *= Math.pow(0.98, 60/FPS);
+        setAlp(int(this.alp));
+        super.drawObject();
+        setAlp(100);
+        if (this.x > 1200 || this.sec <= 0) {
+            weapons.deleteWeapon(this.id);
+        }
+        this.alp = this.alp>10?this.alp * Math.pow(0.985, 60/FPS):this.alp;
+        
+        this.sec -= 1;
+    }
+
+    onHit(){
+        weapons.deleteWeapon(this.id);
+        if (this.t == WEAPONS.LPLASMABALL) return [STATUS.PARALYSE]; 
+        return [];
+    }
+
+
+}
 
 //Turn Extra energies into Beam gauge
 class Destorybeam {//*****TODO*****
@@ -373,62 +423,100 @@ class BounceMissiles {//*****TODO*****
 
 }
 
-//Paralysis enemies
-class Plasmaball extends GameObject{//*****TODO*****
-    constructor(){
-        this.autoOnly = true;
-        super((sShip.ship.x+40), (sShip.ship.y - n*6 + i*12), 30, int((i-n/2)*2), 14, -1, 4);
-    }
-
-
-}
 
 //エフェクト（爆発演出）の管理
-class Effect {
-    constructor(x,y,n,t){
-        this.x = x;
-        this.y = y;
-        this.n = n;
-        this.t = t;
-    }
+const EffectFrame = new Map();
+EffectFrame.set(EFFECTS.EXPLOSION, 9);
+EffectFrame.set(EFFECTS.SHOCK, 8);
 
-    drawEffect(){
-        if(this.n > 0){
-            var n = int(this.n);
-            drawImgTS(3, (9-n)*128, 0, 128, 128, this.x - 64, this.y - 64, 128, 128);
-            this.n -= 1 * 30/FPS;
-        }
-    }
-}
+const setEffectFunc = new Map();
+setEffectFunc.set(EFFECTS.EXPLOSION,function(x,y,n,d){return Explosion.setExplosion(x,y,n,d);});
+setEffectFunc.set(EFFECTS.SHOCK,function(x,y,n,d){return Shock.setShock(x,y,n,d);});
+
 
 const MAX_EFFECTS = 100;
 
-class Explosions{
+
+class Effect {
+    constructor(x, y, t, duration, totalFrame = 1, startFrame = 0){
+        this.x = x;
+        this.y = y;
+        this.t = t;
+        this.totalFrame = totalFrame;
+        this.frame = startFrame;
+        this.frame_FPS_counter = startFrame;
+        this.duration = int(duration * FPS/30);
+    }
+    
+    drawEffect(){      
+        if (this.duration == 0) return;  
+        var frameWidth = img[this.t].width/this.totalFrame;
+        var frameHeight = img[this.t].height;
+        drawImgTS(this.t, frameWidth*this.frame, 0, frameWidth, frameHeight, this.x-frameWidth/2, this.y-frameHeight/2, frameWidth, frameHeight);
+        if (this.totalFrame > 1){
+            this.frame_FPS_counter = (this.frame_FPS_counter + 1 * 30/FPS);
+            this.frame = int(this.frame_FPS_counter) % this.totalFrame;
+            if (this.frame == 0) this.frame += this.startFrame;
+        }
+        this.duration--;
+    }
+
+    drawEffectPause(){
+        var frameWidth = img[this.t].width/this.totalFrame;
+        var frameHeight = img[this.t].height;
+        drawImgTS(this.t, frameWidth*this.frame, 0, frameWidth, frameHeight, this.x-frameWidth/2, this.y-frameHeight/2, frameWidth, frameHeight);
+    }
+}
+
+class Effects {
     constructor(){
-        this.explosions = new Array(MAX_EFFECTS);
-        this.numExplosions = 0;
-        for (var i = 0; i < MAX_EFFECTS; i++) this.explosions[i] = null;
+        this.effects = new Array(MAX_EFFECTS);
+        this.numEffects = 0;
+        for (var i = 0; i < MAX_EFFECTS; i++) this.effects[i] = null;
     }
 
-    setExplosion(x,y,n,t){
-        this.explosions[this.numExplosions] = new Effect(x,y,n,t);
-        this.numExplosions = (this.numExplosions + 1) % MAX_EFFECTS;
+    setEffect(effect, x, y, n, duration){
+        setEffectFunc.get(effect)(x,y,n,duration);
     }
 
-    drawExplosions(){
+    drawEffects(){
         for (var i = 0; i < MAX_EFFECTS; i++){
-            if (!this.explosions[i]) continue;
-            this.explosions[i].drawEffect();
-            if (this.explosions[i].n == 0) this.deleteExplosions(i);
+            if (this.effects[i]){
+                this.effects[i].drawEffect();
+                this.effects[i].duration == 0? this.deleteEffect(i):0;
+            }
         }
     }
 
-    deleteExplosions(i){
-        if (this.explosions[i]){
-            delete this.explosions[i];
-            this.explosions[i] = null;
-            //console.log("explosion deleted");
+    deleteEffect(i){
+        if (this.effects[i]){
+            this.effects.splice(i,1,null);
         }
+    }
+}
+
+
+class Explosion extends Effect{
+    constructor(x,y,n,duration){
+        super(x,y,EFFECTS.EXPLOSION,duration,EffectFrame.get(EFFECTS.EXPLOSION), n);
+        this.id = effects.numEffects++;
+        effects.numEffects = effects.numEffects % MAX_EFFECTS;
+    }
+
+    static setExplosion(x,y,n,duration){
+        effects.effects[effects.numEffects] = new Explosion(x,y,n,duration);
+    }
+}
+
+class Shock extends Effect{
+    constructor(x,y,n,duration){
+        super(x,y,EFFECTS.SHOCK,duration,EffectFrame.get(EFFECTS.SHOCK), n);
+        this.id = effects.numEffects++;
+        effects.numEffects = effects.numEffects % MAX_EFFECTS;
+    }
+
+    static setShock(x,y,n,duration){
+        effects.effects[effects.numEffects] = new Shock(x,y,n,duration);
     }
 }
 
@@ -438,7 +526,6 @@ class Explosions{
 const MAX_ENEMIES = 100;
 
 const ENEMIES = new Map();
-
 ENEMIES.set("BULLET",4);
 ENEMIES.set("WING",5);
 ENEMIES.set("BALL",6);
@@ -466,7 +553,7 @@ class Enemies {
         //console.log("enemies setted");
         
     }
-    
+
     moveEnemies(){
         for (var i = 0; i < MAX_ENEMIES; i++){
             if (this.enemies[i]){ 
@@ -488,7 +575,7 @@ class Enemies {
                     //enemy 03
                     case 7: if (this.enemies[i].xp < 0){
                                 //this.enemies[i].xp = int(this.enemies[i].xp * Math.pow(0.95, 30/FPS)); //adjust speed with FPS;
-                                if(tmr % Math.ceil(FPS/30) == 0) this.enemies[i].xp = int(this.enemies[i].xp * 0.95); //adjust speed with FPS;
+                                if(tmr % Math.ceil(FPS/30) == 0) this.enemies[i].xp = int(this.enemies[i].xp * 0.95);
                                 if (this.enemies[i].xp == 0){
                                     this.setEnemies(this.enemies[i].x, this.enemies[i].y, -20, 0, 4);
                                     this.enemies[i].xp = 20;
@@ -515,14 +602,14 @@ class Enemies {
         if (this.enemies[i].muteki > 0) return;
         this.enemies[i].life -= 1;
         if (this.enemies[i].life == 0){ 
-            setExplosion(this.enemies[i].x, this.enemies[i].y, 9)
+            effects.setEffect(EFFECTS.EXPLOSION,this.enemies[i].x, this.enemies[i].y, 0, EffectFrame.get(EFFECTS.EXPLOSION));
             this.deleteEnemies(i);
             score += 100;
             if (score > hiScore) hiScore = score;
         }
         else{ 
-            setExplosion(this.enemies[i].x, this.enemies[i].y, 4);
-            this.enemies[i].muteki = ENEMY_IFRAME;
+            effects.setEffect(WeaponEffect.get(sShip.currentWeapon),this.enemies[i].x, this.enemies[i].y, 0, EffectFrame.get(WeaponEffect.get(sShip.currentWeapon)));
+
         }
     }
 
@@ -582,13 +669,14 @@ class Items { // *****TODO*****
 
 var weapons = new Weapons();
 var enemies = new Enemies(); 
-var explosions = new Explosions();
+var effects = new Effects();
 var items = new Items();
 
 function initObject(){
     weapons = new Weapons();
     enemies = new Enemies();
-    explosions = new Explosions();
+    effects = new Effects();
+    items = new Items();
 }
 
 function setEnemies(){
@@ -699,14 +787,20 @@ function hitCheck(){
 
         //Enemies x Weapons
         for (var j = 0; j < MAX_WEAPONS; j++){
+            var hit = false;
             if (enemies.enemies[i].t == 4) break;
             if (!(weapons.weapons[j])) continue;
-            if (enemies.enemies[i].hitCheck(weapons.weapons[j], r1,r2)){
+            if (enemies.enemies[i].muteki==0 && enemies.enemies[i].hitCheck(weapons.weapons[j], r1,r2)){
                 //explosions.setExplosion(enemies.enemies[i].x, enemies.enemies[i].y, 9);
+                hit = true;
                 enemies.decreaseEnemyLife(i);
-                if(weapons.weapons[j].t == 2) weapons.deleteWeapon(j);
-                break;
+                const status = weapons.weapons[j].onHit();
+                if(!enemies.enemies[i]) break;
+                for (var k = 0; k < status.length; k++){
+                    enemies.enemies[i].t!=8?enemies.enemies[i].paralyseTmr += 10 * FPS/30 : 0;
+                }
             }
+            hit?enemies.enemies[i].muteki = ENEMY_IFRAME:0;
         }
     }
 
@@ -721,12 +815,10 @@ function hitCheck(){
                 case 10: if (weapons.numPowerUp < sShip.getEnergy()) weapons.numPowerUp++; break;
                 case 11: 
                         weapons.numL += 50; 
-                        sShip.currentWeapon = 12;
+                        sShip.currentWeapon = 15;
                         break;
             }
-            
             items.deleteItems(i);
-
         }
     }
 }
@@ -763,8 +855,12 @@ function setExplosion(x,y,n){
     explosions.setExplosion(x,y,n);
 }
 
+function setShock(x,y,n){
+    shocks.setShock(x,y,n);
+}
+
 function drawEffects(){
-    explosions.drawExplosions();
+    effects.drawEffects();
 }
 
 function gameoverCheck(){
@@ -1442,7 +1538,7 @@ function gameoverMenu(){
     drawScore();
     const [x,y] = getShipLocation();
     if (tmr > FPS*5) {scene = SCENE.TITLE; stage = -999}
-    else if (tmr % int(FPS*1/6) == 1) setExplosion(x+rnd(120)-60, y+rnd(90)-40, 9);
+    else if (tmr % int(FPS*1/6) == 1) effects.setEffect(EFFECTS.EXPLOSION, x + rnd(120) - 60, y + rnd(120) - 60, 0, EffectFrame.get(EFFECTS.EXPLOSION));
     moveObjects();
     moveMissile();
     drawEffects();
