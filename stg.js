@@ -13,10 +13,9 @@ function setup(){
     //new sprites
     loadImg(14, "image/plasmaball3.0.png");
     loadImg(15, "image/Lplasmaball.png");
-    loadImg(16, "image/shock.png");
+    loadImg(16, "image/shock4.0.png");
     
     initSShip();
-    //initMissile();
     initObject();
     loadSound(0, "sound/bgm.m4a");
 }
@@ -46,24 +45,36 @@ OccupiedKey.set(65, 'AUTO');
 OccupiedKey.set(13, 'SELECT');
 OccupiedKey.set(27, 'BACK');
 
-
-const WEAPONS = Object.freeze({
+//Image IDs
+const PICTURES = Object.freeze({
+    BG1: 0,
+    SHIP: 1,
+    TITLE: 13,
+    //WEAPONS
     MISSILE: 2,
     LASER: 12,
     PLASMABALL: 14,
     LPLASMABALL: 15,
-});
-
-const EFFECTS = Object.freeze({
+    //EFFECTS
     EXPLOSION: 3,
     SHOCK: 16,
+    //ENEMIES
+    BULLET: 4,
+    WING: 5,
+    BALL: 6,
+    HOPPER: 7,
+    BLOCK: 8,
+    //ITEMS
+    ITEM_E: 9,
+    ITEM_M: 10,
+    ITEM_L: 11,
 })
 
 const WeaponEffect = new Map();
-WeaponEffect.set(WEAPONS.PLASMABALL, EFFECTS.SHOCK);
-WeaponEffect.set(WEAPONS.LPLASMABALL, EFFECTS.SHOCK);
-WeaponEffect.set(WEAPONS.MISSILE, EFFECTS.EXPLOSION);
-WeaponEffect.set(WEAPONS.LASER, EFFECTS.EXPLOSION);
+WeaponEffect.set(PICTURES.PLASMABALL, PICTURES.SHOCK);
+WeaponEffect.set(PICTURES.LPLASMABALL, PICTURES.SHOCK);
+WeaponEffect.set(PICTURES.MISSILE, PICTURES.EXPLOSION);
+WeaponEffect.set(PICTURES.LASER, PICTURES.EXPLOSION);
 
 const SCENE = Object.freeze({
     TITLE: 0,
@@ -113,7 +124,6 @@ function mainloop(){
             setItems();
             hitCheck();
             drawEffects();
-
             break;
 
         case SCENE.GAMEOVER:
@@ -138,8 +148,8 @@ function drawBG(spd){
     if (scene==SCENE.PAUSE) spd = 0;
 
     bgx = (bgx + spd) % 1200;
-    drawImg(0,-bgx,0);
-    drawImg(0,1200-bgx,0);
+    drawImg(PICTURES.BG1,-bgx,0);
+    drawImg(PICTURES.BG1,1200-bgx,0);
 
     var horizonY = 580;
     var offsetX = bgx%40;
@@ -158,30 +168,22 @@ function drawBG(spd){
 
 
 //*****GAME*****
-const MISSILE_RADIUS = 12;
-const SELF_RADIUS = 30;
-
-class GameObject {
-    constructor(x, y, xp, yp, t, life, totalFrame = 1){
+class Anime {
+    constructor(x, y, xp, yp, t, duration, totalFrame = 1, startFrame = 0){
         this.x = x;
         this.y = y;
         this.xp = xp;
-        this.yp = yp ;
+        this.yp = yp;
         this.t = t;
-        this.life = life;
-        this.muteki = 0;
         this.totalFrame = totalFrame;
-        this.frame = 0;
-        this.frame_FPS_counter = 0;
-        this.paralyseTmr= 0;
+        this.startFrame = startFrame;
+        this.frame = startFrame;
+        this.frame_FPS_counter = startFrame;
+        this.duration = int(duration * FPS/30);
     }
     
-    drawObject(){        
-        if (this.paralyseTmr > 0){ 
-            this.drawObjectPause(); 
-            this.paralyseTmr--;
-            return;
-        }
+    drawAnimation(){      
+        if (this.duration == 0) return;  
         var frameWidth = img[this.t].width/this.totalFrame;
         var frameHeight = img[this.t].height;
         this.x = this.x + this.xp * 30/FPS;
@@ -190,13 +192,40 @@ class GameObject {
         if (this.totalFrame > 1){
             this.frame_FPS_counter = (this.frame_FPS_counter + 1 * 30/FPS);
             this.frame = int(this.frame_FPS_counter) % this.totalFrame;
+            if (this.frame == 0) this.frame += this.startFrame;
         }
+        this.duration--;
     }
 
-    drawObjectPause(){
+    drawAnimationPause(){
         var frameWidth = img[this.t].width/this.totalFrame;
         var frameHeight = img[this.t].height;
         drawImgTS(this.t, frameWidth*this.frame, 0, frameWidth, frameHeight, this.x-frameWidth/2, this.y-frameHeight/2, frameWidth, frameHeight);
+    }
+}
+
+const MISSILE_RADIUS = 12;
+const SELF_RADIUS = 30;
+
+class GameObject extends Anime{
+    constructor(x, y, xp, yp, t, life, totalFrame = 1){
+        super(x,y,xp,yp,t,-1,totalFrame);
+        this.life = life;
+        this.muteki = 0;
+        this.paralyseTmr = 0;
+    }
+    
+    drawObject(){        
+        if (this.paralyseTmr > 0){ 
+            this.drawObjectPause(); 
+            this.paralyseTmr--;
+            return;
+        }
+        this.drawAnimation();
+    }
+
+    drawObjectPause(){
+        this.drawAnimationPause();
     }
 
     hitCheck(other, r1, r2){
@@ -212,7 +241,7 @@ class SShip {
         this.auto = false;
         this.missileTmr = 0;
         this.dragging = false;
-        this.currentWeapon = WEAPONS.PLASMABALL;
+        this.currentWeapon = PICTURES.PLASMABALL;
     }
 
     moveSShip(){
@@ -257,33 +286,30 @@ class SShip {
 
 var sShip = new SShip(400,360);
 
-
 //自機が撃つ弾の管理
-
-
 //default x,y velocities of different weapons
 const WeaponVelocity = new Map();
-WeaponVelocity.set(WEAPONS.MISSILE,new vec2d(40,0));
-WeaponVelocity.set(WEAPONS.LASER,new vec2d(40,0));
-WeaponVelocity.set(WEAPONS.PLASMABALL,new vec2d(35,0));
-WeaponVelocity.set(WEAPONS.LPLASMABALL,new vec2d(35,0));
+WeaponVelocity.set(PICTURES.MISSILE,new vec2d(40,0));
+WeaponVelocity.set(PICTURES.LASER,new vec2d(40,0));
+WeaponVelocity.set(PICTURES.PLASMABALL,new vec2d(35,0));
+WeaponVelocity.set(PICTURES.LPLASMABALL,new vec2d(35,0));
 
 //number of animation frames of different weapons
 const WeaponFrame = new Map();
-WeaponFrame.set(WEAPONS.MISSILE, 1);
-WeaponFrame.set(WEAPONS.LASER, 1);
-WeaponFrame.set(WEAPONS.PLASMABALL, 4);
-WeaponFrame.set(WEAPONS.LPLASMABALL, 4);
+WeaponFrame.set(PICTURES.MISSILE, 1);
+WeaponFrame.set(PICTURES.LASER, 1);
+WeaponFrame.set(PICTURES.PLASMABALL, 4);
+WeaponFrame.set(PICTURES.LPLASMABALL, 4);
 
 const STATUS = Object.freeze({
     PARALYSE: 0,
 })
 
 const setWeaponFunc = new Map();
-setWeaponFunc.set(WEAPONS.MISSILE, function(){return Missile.createMissiles()});
-setWeaponFunc.set(WEAPONS.LASER, function(){return Missile.createMissiles()});
-setWeaponFunc.set(WEAPONS.PLASMABALL, function(){return Plasmaball.createPlasmaball()});
-setWeaponFunc.set(WEAPONS.LPLASMABALL, function(){return Plasmaball.createPlasmaball()});
+setWeaponFunc.set(PICTURES.MISSILE, function(){return Missile.createMissiles()});
+setWeaponFunc.set(PICTURES.LASER, function(){return Missile.createMissiles()});
+setWeaponFunc.set(PICTURES.PLASMABALL, function(){return Plasmaball.createPlasmaball()});
+setWeaponFunc.set(PICTURES.LPLASMABALL, function(){return Plasmaball.createPlasmaball()});
 
 const MAX_WEAPONS = 1000;
 class Weapons {
@@ -307,6 +333,14 @@ class Weapons {
         }
     }
 
+    drawWeaponsPause(){
+        for (var i = 0; i < this.weapons.length; i++) {
+            if (this.weapons[i]){
+                this.weapons[i].drawWeaponPause();
+            }
+        }
+    }
+
     deleteWeapon(i){
         if (this.weapons[i]){
             this.weapons.splice(i,1,null);
@@ -314,14 +348,31 @@ class Weapons {
     }
 }
 
-class Missile extends GameObject{
+class Weapon extends GameObject{
+    constructor(x, y, xp, yp, t, life, totalFrame = 1){
+        super(x, y, xp, yp, t, life, totalFrame);
+        if (this.moveWeapon == undefined) {
+            throw new Error("moveWeapon method must be implemented");
+        }
+        if (this.drawWeaponPause == undefined) {
+            throw new Error("drawWeaponPause must be implemented");
+        }
+        if (this.onHit == undefined) {
+            throw new Error("onHit method must be implemented");
+        }
+        
+        this.id = weapons.numWeapons;
+    }
+}
+
+class Missile extends Weapon{
     constructor(i){//set missile
         var n = weapons.numPowerUp;
         var currentWeapon = sShip.currentWeapon;
         var frame = WeaponFrame.get(currentWeapon);
         var velocity = WeaponVelocity.get(currentWeapon);
-        super((sShip.ship.x+40), (sShip.ship.y - n*6 + i*12), velocity.x, int((i-n/2)*2), currentWeapon, -1, frame);
-        this.id = weapons.numWeapons;
+        const [x,y] = getShipLocation();
+        super((x+40), (y - n*6 + i*12), velocity.x, int((i-n/2)*2), currentWeapon, -1, frame);
     }
 
     static createMissiles(){
@@ -344,25 +395,28 @@ class Missile extends GameObject{
         }
     }
 
+    drawWeaponPause(){
+        this.drawAnimationPause();
+    }
+
     onHit(){
-        if (this.t == WEAPONS.MISSILE) weapons.deleteWeapon(this.id); //delete when the missile is not a laser;
+        if (this.t == PICTURES.MISSILE) weapons.deleteWeapon(this.id); //delete when the missile is not a laser;
         return [];
     }
 }
 
-
 //Paralysis enemies
-class Plasmaball extends GameObject{//*****TODO*****
+class Plasmaball extends Weapon{
     constructor(i){//set missile
         var n = weapons.numPowerUp;
         var currentWeapon = sShip.currentWeapon;
         var frame = WeaponFrame.get(currentWeapon);
         var velocity = WeaponVelocity.get(currentWeapon);
         velocity = velocity.rotate(8*((i-n/2)*2));
-        super((sShip.ship.x+40), (sShip.ship.y - n*6 + i*12), velocity.x, velocity.y, currentWeapon, -1, frame);
-        this.id = weapons.numWeapons;
+        const [x,y] = getShipLocation();
+        super((x+40), (y - n*6 + i*12), velocity.x, velocity.y, currentWeapon, -1, frame);
         this.alp = 100;
-        this.sec = FPS * 2;
+        this.sec = FPS * 1.5;
     }
 
     static createPlasmaball(){
@@ -387,14 +441,20 @@ class Plasmaball extends GameObject{//*****TODO*****
         if (this.x > 1200 || this.sec <= 0) {
             weapons.deleteWeapon(this.id);
         }
-        this.alp = this.alp>10?this.alp * Math.pow(0.985, 60/FPS):this.alp;
+        this.alp = this.alp>20?this.alp * Math.pow(0.985, 60/FPS):this.alp;
         
         this.sec -= 1;
     }
 
+    drawWeaponPause(){
+        setAlp(int(this.alp));
+        this.drawObjectPause();
+        setAlp(100);
+    }
+
     onHit(){
-        weapons.deleteWeapon(this.id);
-        if (this.t == WEAPONS.LPLASMABALL) return [STATUS.PARALYSE]; 
+        //weapons.deleteWeapon(this.id);
+        if (this.t == PICTURES.LPLASMABALL) return [STATUS.PARALYSE]; 
         return [];
     }
 
@@ -425,48 +485,12 @@ class BounceMissiles {//*****TODO*****
 
 
 //エフェクト（爆発演出）の管理
-const EffectFrame = new Map();
-EffectFrame.set(EFFECTS.EXPLOSION, 9);
-EffectFrame.set(EFFECTS.SHOCK, 8);
-
 const setEffectFunc = new Map();
-setEffectFunc.set(EFFECTS.EXPLOSION,function(x,y,n,d){return Explosion.setExplosion(x,y,n,d);});
-setEffectFunc.set(EFFECTS.SHOCK,function(x,y,n,d){return Shock.setShock(x,y,n,d);});
+setEffectFunc.set(PICTURES.EXPLOSION,function(x,y,n,d){return Explosion.setExplosion(x,y,n,d);});
+setEffectFunc.set(PICTURES.SHOCK,function(x,y,n,d){return Shock.setShock(x,y,n,d);});
 
 
 const MAX_EFFECTS = 100;
-
-
-class Effect {
-    constructor(x, y, t, duration, totalFrame = 1, startFrame = 0){
-        this.x = x;
-        this.y = y;
-        this.t = t;
-        this.totalFrame = totalFrame;
-        this.frame = startFrame;
-        this.frame_FPS_counter = startFrame;
-        this.duration = int(duration * FPS/30);
-    }
-    
-    drawEffect(){      
-        if (this.duration == 0) return;  
-        var frameWidth = img[this.t].width/this.totalFrame;
-        var frameHeight = img[this.t].height;
-        drawImgTS(this.t, frameWidth*this.frame, 0, frameWidth, frameHeight, this.x-frameWidth/2, this.y-frameHeight/2, frameWidth, frameHeight);
-        if (this.totalFrame > 1){
-            this.frame_FPS_counter = (this.frame_FPS_counter + 1 * 30/FPS);
-            this.frame = int(this.frame_FPS_counter) % this.totalFrame;
-            if (this.frame == 0) this.frame += this.startFrame;
-        }
-        this.duration--;
-    }
-
-    drawEffectPause(){
-        var frameWidth = img[this.t].width/this.totalFrame;
-        var frameHeight = img[this.t].height;
-        drawImgTS(this.t, frameWidth*this.frame, 0, frameWidth, frameHeight, this.x-frameWidth/2, this.y-frameHeight/2, frameWidth, frameHeight);
-    }
-}
 
 class Effects {
     constructor(){
@@ -488,6 +512,14 @@ class Effects {
         }
     }
 
+    drawEffectsPause(){
+        for (var i = 0; i < MAX_EFFECTS; i++){
+            if (this.effects[i]){
+                this.effects[i].drawAnimationPause();
+            }
+        }
+    }
+
     deleteEffect(i){
         if (this.effects[i]){
             this.effects.splice(i,1,null);
@@ -495,28 +527,49 @@ class Effects {
     }
 }
 
+class Effect extends Anime{
+    constructor(x,y,xp,yp,t,duration,totalFrame = 1, startFrame = 0){
+        super(x,y,xp,yp,t,duration,totalFrame, startFrame);
+        this.id = effects.numEffects;
+    }
+}
 
 class Explosion extends Effect{
     constructor(x,y,n,duration){
-        super(x,y,EFFECTS.EXPLOSION,duration,EffectFrame.get(EFFECTS.EXPLOSION), n);
-        this.id = effects.numEffects++;
-        effects.numEffects = effects.numEffects % MAX_EFFECTS;
+        super(x,y,-1,0,PICTURES.EXPLOSION,duration,Explosion._frame, n);
     }
 
     static setExplosion(x,y,n,duration){
         effects.effects[effects.numEffects] = new Explosion(x,y,n,duration);
+        effects.numEffects = (effects.numEffects+1) % MAX_EFFECTS;
+    }
+
+    drawEffect(){
+        this.drawAnimation();
+    }
+
+    static get _frame(){
+        return 9;
     }
 }
 
 class Shock extends Effect{
     constructor(x,y,n,duration){
-        super(x,y,EFFECTS.SHOCK,duration,EffectFrame.get(EFFECTS.SHOCK), n);
-        this.id = effects.numEffects++;
-        effects.numEffects = effects.numEffects % MAX_EFFECTS;
+        super(x,y,-1,0,PICTURES.SHOCK,duration,Shock._frame, n);
     }
 
     static setShock(x,y,n,duration){
         effects.effects[effects.numEffects] = new Shock(x,y,n,duration);
+        effects.numEffects = (effects.numEffects+1) % MAX_EFFECTS;
+
+    }
+
+    drawEffect(){
+        this.drawAnimation();
+    }
+
+    static get _frame(){
+        return 10;
     }
 }
 
@@ -602,7 +655,7 @@ class Enemies {
         if (this.enemies[i].muteki > 0) return;
         this.enemies[i].life -= 1;
         if (this.enemies[i].life == 0){ 
-            effects.setEffect(EFFECTS.EXPLOSION,this.enemies[i].x, this.enemies[i].y, 0, EffectFrame.get(EFFECTS.EXPLOSION));
+            effects.setEffect(PICTURES.EXPLOSION,this.enemies[i].x, this.enemies[i].y, 0, EffectFrame.get(PICTURES.EXPLOSION));
             this.deleteEnemies(i);
             score += 100;
             if (score > hiScore) hiScore = score;
@@ -797,7 +850,7 @@ function hitCheck(){
                 const status = weapons.weapons[j].onHit();
                 if(!enemies.enemies[i]) break;
                 for (var k = 0; k < status.length; k++){
-                    enemies.enemies[i].t!=8?enemies.enemies[i].paralyseTmr += 10 * FPS/30 : 0;
+                    enemies.enemies[i].t!=8?enemies.enemies[i].paralyseTmr = 10 * FPS/30 : 0;
                 }
             }
             hit?enemies.enemies[i].muteki = ENEMY_IFRAME:0;
@@ -1500,8 +1553,9 @@ function pauseMenu(){
 
     sShip.ship.drawObjectPause();
     for (var i = 0; i < MAX_ENEMIES; i++) enemies.enemies[i]?enemies.enemies[i].drawObjectPause():0;
-    for (var i = 0; i < MAX_WEAPONS; i++) weapons.weapons[i]?weapons.weapons[i].drawObjectPause():0;
+    weapons.drawWeaponsPause();
     for (var i = 0; i < MAX_ITEMS; i++) items.items[i]?items.items[i].drawObjectPause():0;
+    effects.drawEffectsPause();
     
     pauseButton();
     fText("PAUSE", 600, 200, 80, "yellow");
@@ -1538,7 +1592,7 @@ function gameoverMenu(){
     drawScore();
     const [x,y] = getShipLocation();
     if (tmr > FPS*5) {scene = SCENE.TITLE; stage = -999}
-    else if (tmr % int(FPS*1/6) == 1) effects.setEffect(EFFECTS.EXPLOSION, x + rnd(120) - 60, y + rnd(120) - 60, 0, EffectFrame.get(EFFECTS.EXPLOSION));
+    else if (tmr % int(FPS*1/6) == 1) effects.setEffect(PICTURES.EXPLOSION, x + rnd(120) - 60, y + rnd(120) - 60, 0, EffectFrame.get(PICTURES.EXPLOSION));
     moveObjects();
     moveMissile();
     drawEffects();
