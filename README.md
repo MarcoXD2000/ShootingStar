@@ -33,7 +33,9 @@ Add support on adjustable FPS
 - Fixed bugs caused by timer running in the setting menu when the game is paused
 - Implemented adjustable and expandable item spawn probability list.
 - Reworked the code implementation of the weapon system, the system now supports expandsions of new weapons.
-- Reworked the code implementation of the effect system, the system now supports expandsions of new effects
+- Reworked the code implementation of the effect system, the system now supports expandsions of new effects.
+- Reworked the code implementation of the enemy system, the system now supports expandsions of new enemies.
+- Reworked the code implementation of the items system, the system now supports expandsions of new items.
 
 
 
