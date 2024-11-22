@@ -32,10 +32,10 @@ Add support on adjustable FPS
 # 1.0.0
 - Fixed bugs caused by timer running in the setting menu when the game is paused
 - Implemented adjustable and expandable item spawn probability list.
-- Reworked the code implementation of the weapon system, the system now supports expandsions of new weapons.
-- Reworked the code implementation of the effect system, the system now supports expandsions of new effects.
-- Reworked the code implementation of the enemy system, the system now supports expandsions of new enemies.
-- Reworked the code implementation of the items system, the system now supports expandsions of new items.
+- Updated the structure of the main game code, it is now more expandable.
+- Added new weapon "Plasma ball"
+- Added new sprites for new weapon "Plasma ball"
+- Added new sprites for new effects "shock" 
 
 
 
