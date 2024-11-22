@@ -9,8 +9,14 @@ function setup(){
     for(var i=0; i<=2; i++) loadImg(9+i, "image/item"+i+".png");
     loadImg(12, "image/laser.png");
     loadImg(13, "image/title_ss.png");
+
+    //new sprites
+    loadImg(14, "image/plasmaball3.0.png");
+    loadImg(15, "image/Lplasmaball.png");
+    loadImg(16, "image/shock4.0.png");
+    loadImg(17, "image/Lshock.png");
+    
     initSShip();
-    //initMissile();
     initObject();
     loadSound(0, "sound/bgm.m4a");
 }
@@ -40,6 +46,63 @@ OccupiedKey.set(65, 'AUTO');
 OccupiedKey.set(13, 'SELECT');
 OccupiedKey.set(27, 'BACK');
 
+//Image IDs
+const PICTURES = Object.freeze({
+    BG1: 0,
+    SHIP: 1,
+    TITLE: 13,
+    //WEAPONS
+    MISSILE: 2,
+    LASER: 12,
+    PLASMABALL: 14,
+    LPLASMABALL: 15,
+    //EFFECTS
+    EXPLOSION: 3,
+    PURPLESHOCK: 16,
+    YELLOWSHOCK: 17,
+    //ENEMIES
+    BULLET: 4,
+    WING: 5,
+    BALL: 6,
+    HOPPER: 7,
+    BLOCK: 8,
+    //ITEMS
+    ITEM_E: 9,
+    ITEM_M: 10,
+    ITEM_L: 11,
+})
+
+const picturesFrame = new Map();
+    picturesFrame.set(PICTURES.BG1, 1);
+    picturesFrame.set(PICTURES.SHIP, 1);
+    picturesFrame.set(PICTURES.TITLE, 1);
+    //WEAPONS
+    picturesFrame.set(PICTURES.MISSILE, 1);
+    picturesFrame.set(PICTURES.LASER, 1);
+    picturesFrame.set(PICTURES.PLASMABALL, 4);
+    picturesFrame.set(PICTURES.LPLASMABALL, 4);
+    //EFFECTS
+    picturesFrame.set(PICTURES.EXPLOSION, 9);
+    picturesFrame.set(PICTURES.PURPLESHOCK, 10);
+    picturesFrame.set(PICTURES.YELLOWSHOCK, 10);
+    //ENEMIES
+    picturesFrame.set(PICTURES.BULLET, 1);
+    picturesFrame.set(PICTURES.WING, 1);
+    picturesFrame.set(PICTURES.BALL, 1);
+    picturesFrame.set(PICTURES.HOPPER, 1);
+    picturesFrame.set(PICTURES.BLOCK, 1);
+    //ITEMS
+    picturesFrame.set(PICTURES.ITEM_E, 1);
+    picturesFrame.set(PICTURES.ITEM_M, 1);
+    picturesFrame.set(PICTURES.ITEM_L, 1);
+
+
+const WeaponEffect = new Map();
+    WeaponEffect.set(PICTURES.SHIP, PICTURES.EXPLOSION);
+    WeaponEffect.set(PICTURES.PLASMABALL, PICTURES.PURPLESHOCK);
+    WeaponEffect.set(PICTURES.LPLASMABALL, PICTURES.YELLOWSHOCK);
+    WeaponEffect.set(PICTURES.MISSILE, PICTURES.EXPLOSION);
+    WeaponEffect.set(PICTURES.LASER, PICTURES.EXPLOSION);
 
 const SCENE = Object.freeze({
     TITLE: 0,
@@ -51,7 +114,7 @@ const SCENE = Object.freeze({
 });
 
 var FPS = 60;
-const MAX_SHIP_ENERGY = 10;
+var MAX_SHIP_ENERGY = 10;
 var AUTO_MISSILE_CD = int(5 * FPS/30); 
 var IFRAME = int(30 * FPS/30);
 var ENEMY_IFRAME = int(1 * FPS/30);
@@ -65,12 +128,12 @@ var menu = 0;
 var uiOpacity = 80;
 
 function mainloop(){
-    tmr++;
     drawBG(1);
     setFPS(FPS);
     
     switch (scene) {
         case SCENE.TITLE:
+            tmr++;
             mainMenu();
             break;
 
@@ -78,31 +141,21 @@ function mainloop(){
             pauseMenu();
             break;
         case SCENE.STAGE:
+            tmr++;
             pauseGame();
             gameoverCheck();
             gameUI(); 
             moveObjects();
             moveSShip();
-            moveMissile();
             setEnemies();
             setItems();
             hitCheck();
             drawEffects();
-
-            //console.log("tmr = ", tmr);
-
             break;
 
         case SCENE.GAMEOVER:
-            drawScore();
-            const [x,y] = getShipLocation();
-            if (tmr > FPS*5) {scene = SCENE.TITLE; stage = -999}
-            else if (tmr % int(FPS*1/6) == 1) setExplosion(x+rnd(120)-60, y+rnd(90)-40, 9);
-            moveObjects();
-            moveMissile();
-            drawEffects();
-            fText("GAME OVER", 600, 300, 50, "red");
-            
+            tmr++;
+            gameoverMenu();
             break;
 
         case SCENE.SETTING:
@@ -122,8 +175,8 @@ function drawBG(spd){
     if (scene==SCENE.PAUSE) spd = 0;
 
     bgx = (bgx + spd) % 1200;
-    drawImg(0,-bgx,0);
-    drawImg(0,1200-bgx,0);
+    drawImg(PICTURES.BG1,-bgx,0);
+    drawImg(PICTURES.BG1,1200-bgx,0);
 
     var horizonY = 580;
     var offsetX = bgx%40;
@@ -142,60 +195,102 @@ function drawBG(spd){
 
 
 //*****GAME*****
-const MISSILE_RADIUS = 12;
-const SELF_RADIUS = 30;
-
-class GameObject {
-    constructor(x, y, xp, yp, t, life){
+class Anime {
+    constructor(x, y, xp, yp, t, duration, startFrame = 0){
         this.x = x;
         this.y = y;
         this.xp = xp;
-        this.yp = yp ;
+        this.yp = yp;
         this.t = t;
-        this.life = life;
-        this.muteki = 0;
+        this.totalFrame = picturesFrame.get(t);
+        this.startFrame = startFrame;
+        this.frame = startFrame;
+        this.frame_FPS_counter = startFrame;
+        this.duration = int(duration * FPS/30);
     }
     
-    drawObject(){
+    drawAnimation(){      
+        if (this.duration == 0) return;  
+        var frameWidth = img[this.t].width/this.totalFrame;
+        var frameHeight = img[this.t].height;
         this.x = this.x + this.xp * 30/FPS;
         this.y = this.y + this.yp * 30/FPS;
-        drawImgC(this.t, this.x, this.y);
+        drawImgTS(this.t, frameWidth*this.frame, 0, frameWidth, frameHeight, this.x-frameWidth/2, this.y-frameHeight/2, frameWidth, frameHeight);
+        if (this.totalFrame > 1){
+            this.frame_FPS_counter = (this.frame_FPS_counter + 1 * 30/FPS);
+            this.frame = int(this.frame_FPS_counter) % this.totalFrame;
+            if (this.frame == 0) this.frame += this.startFrame;
+        }
+        this.duration--;
+    }
+
+    drawAnimationPause(){
+        var frameWidth = img[this.t].width/this.totalFrame;
+        var frameHeight = img[this.t].height;
+        drawImgTS(this.t, frameWidth*this.frame, 0, frameWidth, frameHeight, this.x-frameWidth/2, this.y-frameHeight/2, frameWidth, frameHeight);
+    }
+}
+
+const MISSILE_RADIUS = 12;
+const SELF_RADIUS = 30;
+const DEBUG_GAME = true;
+
+class GameObject extends Anime{
+    constructor(x, y, xp, yp, t, life, r = -1){
+        super(x,y,xp,yp,t,-1);
+        this.life = life;
+        this.muteki = 0;
+        this.paralyseTmr = 0;
+        if (r == -1) r = (img[t].width/this.totalFrame + img[t].height)/4
+        this.radius = r;
+    }
+    
+    drawObject(){        
+        if (DEBUG_GAME) sCir(this.x,this.y,this.radius,"lime");
+
+        if (this.paralyseTmr > 0){ 
+            this.drawObjectPause(); 
+            this.paralyseTmr--;
+            return;
+        }
+        this.drawAnimation();
     }
 
     drawObjectPause(){
-        drawImgC(this.t, this.x, this.y);
+        this.drawAnimationPause();
     }
 
-    hitCheck(other, r1, r2){
-        if (getDis(this.x, this.y, other.x, other.y) < (r1 + r2)) return true;
+    static hitCheck(a,b){
+        if (getDis(a.x, a.y, b.x, b.y) < (a.radius + b.radius)) return true;
     }
 }
 
 //自機の管理
-class SShip {
+class SShip extends GameObject{
     constructor(x, y){
-        this.ship = new GameObject(x,y,0,0,1,MAX_SHIP_ENERGY);
+        super(x,y,0,0,PICTURES.SHIP,MAX_SHIP_ENERGY,SELF_RADIUS);
         //this.energy = 10;
         this.auto = false;
         this.missileTmr = 0;
         this.dragging = false;
+        this.currentWeapon = PICTURES.MISSILE;
     }
 
     moveSShip(){
         //Ship movement
-        this.ship.x += int(((key[CONTROL.get("RIGHT")] && 1) - (key[CONTROL.get("LEFT")] && 1)) * 20 * 30/FPS);
-        if (this.ship.x >= 1000) this.ship.x = 999; 
-        if (this.ship.x <= 60) this.ship.x = 61;
-        this.ship.y += int(((key[CONTROL.get("DOWN")] && 1) - (key[CONTROL.get("UP")] && 1)) * 20 * 30/FPS); 
-        if (this.ship.y >= 680) this.ship.y = 679; 
-        if (this.ship.y <= 40) this.ship.y = 41;
+        this.x += int(((key[CONTROL.get("RIGHT")] && 1) - (key[CONTROL.get("LEFT")] && 1)) * 20 * 30/FPS);
+        if (this.x >= 1000) this.x = 999; 
+        if (this.x <= 60) this.x = 61;
+        this.y += int(((key[CONTROL.get("DOWN")] && 1) - (key[CONTROL.get("UP")] && 1)) * 20 * 30/FPS); 
+        if (this.y >= 680) this.y = 679; 
+        if (this.y <= 40) this.y = 41;
         
         //Touch/Mouse
         this.dragging = false;
         if (tapC > 0){     
             this.dragging = true;      
-            this.ship.x += int((tapX-this.ship.x)/6);
-            this.ship.y += int((tapY-this.ship.y)/6);            
+            this.x += int((tapX-this.x)/6);
+            this.y += int((tapY-this.y)/6);            
         }
         
         //missile movement
@@ -208,121 +303,328 @@ class SShip {
         if (this.auto) key[CONTROL.get("FIRE")] = 2;
 
         if (key[CONTROL.get("FIRE")] == 1 || (this.auto && !(this.missileTmr))){ 
-            setMissile();
+            setWeapon(this.currentWeapon);
             key[CONTROL.get("FIRE")] = 2;      
         }
     
-        if (this.ship.muteki % 2 == 0) this.ship.drawObject();
-        if (this.ship.muteki > 0) this.ship.muteki--;
+        if (this.muteki % 2 == 0) this.drawObject();
+        if (this.muteki > 0) this.muteki--;
     }
 
     getEnergy(){
-        return this.ship.life;
+        return this.life;
+    }
+
+    onHit(){
+        sShip.life--;
+        sShip.muteki = IFRAME;    
+        return this.t;
     }
 }
 
 var sShip = new SShip(400,360);
 
-
 //自機が撃つ弾の管理
-const MAX_MISSILES = 1000;
+//default x,y velocities of different weapons
+const WeaponVelocity = new Map();
+WeaponVelocity.set(PICTURES.MISSILE,new vec2d(40,0));
+WeaponVelocity.set(PICTURES.LASER,new vec2d(40,0));
+WeaponVelocity.set(PICTURES.PLASMABALL,new vec2d(35,0));
+WeaponVelocity.set(PICTURES.LPLASMABALL,new vec2d(35,0));
 
-class Missiles {
+const STATUS = Object.freeze({
+    PARALYSE: 0,
+})
+
+const setWeaponFunc = new Map();
+setWeaponFunc.set(PICTURES.MISSILE, function(){return Missile.createMissiles()});
+setWeaponFunc.set(PICTURES.LASER, function(){return Missile.createMissiles()});
+setWeaponFunc.set(PICTURES.PLASMABALL, function(){return Plasmaball.createPlasmaball()});
+setWeaponFunc.set(PICTURES.LPLASMABALL, function(){return Plasmaball.createPlasmaball()});
+
+const weaponStatus = new Map();
+weaponStatus.set(PICTURES.MISSILE, function(){return[]});
+weaponStatus.set(PICTURES.LASER, function(){return[]});
+weaponStatus.set(PICTURES.PLASMABALL, function(){return[]});
+weaponStatus.set(PICTURES.LPLASMABALL, function(){return [STATUS.PARALYSE]});
+weaponStatus.set(PICTURES.SHIP, function(){return[]})
+
+const MAX_WEAPONS = 1000;
+class Weapons {
     constructor(){
-        this.missiles = new Array(MAX_MISSILES);
-        this.numMissiles = 0;
+        this.weapons = new Array(MAX_WEAPONS);
         this.numPowerUp = 0;
-        this.numLaser = 0;
-        for (var i = 0; i < MAX_MISSILES; i++) this.missiles[i] = null;
+        this.numL = 0;
+        this.numWeapons = 0;
+        for (var i = 0; i < MAX_WEAPONS; i++) this.weapons[i] = null;
     }
 
-    setMissile(){
-        var n = this.numPowerUp;
-        var bulletType = 2;
-        if (this.numLaser > 0){
-            this.numLaser--;
-            bulletType = 12;
-        }
-        for (var i = 0; i <= n; i++){
-            this.missiles[this.numMissiles] = new GameObject((sShip.ship.x+40), (sShip.ship.y - n*6 + i*12), 40, int((i-n/2)*2), bulletType, -1);
-            this.numMissiles = (this.numMissiles + 1) % MAX_MISSILES;
-            //console.log("missle set");
-        }
+    setWeapon(weapon){
+        setWeaponFunc.get(weapon)();
     }
 
-    moveMissile(){
-        for (var i = 0; i < MAX_MISSILES; i++){
-            if (this.missiles[i]){ 
-                this.missiles[i].drawObject();
-                //console.log("missle move");
-                if (this.missiles[i].x > 1200) {
-                    this.deleteMissiles(i);
-                }
+    moveWeapon(){
+        for (var i = 0; i < this.weapons.length; i++) {
+            if (this.weapons[i]){
+                this.weapons[i].moveWeapon();
             }
         }
     }
 
-    deleteMissiles(i){
-        if (this.missiles[i]){
-            delete this.missiles[i];
-            this.missiles[i] = null;
-            //console.log("missile deleted");
+    drawWeaponsPause(){
+        for (var i = 0; i < this.weapons.length; i++) {
+            if (this.weapons[i]){
+                this.weapons[i].drawWeaponPause();
+            }
         }
     }
 
-    isLaser(i){
-        if (this.missiles[i].t == 12) return true;
-        return false;
+    deleteWeapon(i){
+        if (this.weapons[i]){
+            this.weapons.splice(i,1,null);
+        }
     }
+}
+
+class Weapon extends GameObject{
+    constructor(x, y, xp, yp, t, life, r = -1){
+        super(x, y, xp, yp, t, life, r);
+        if (this.moveWeapon == undefined) {
+            throw new Error("moveWeapon method must be implemented");
+        }
+        if (this.drawWeaponPause == undefined) {
+            throw new Error("drawWeaponPause must be implemented");
+        }
+        if (this.onHit == undefined) {
+            throw new Error("onHit method must be implemented");
+        }
+        
+        this.id = weapons.numWeapons;
+    }
+}
+
+class Missile extends Weapon{
+    constructor(i){//set missile
+        var n = weapons.numPowerUp;
+        var currentWeapon = sShip.currentWeapon;
+        var velocity = WeaponVelocity.get(currentWeapon);
+        const [x,y] = getShipLocation();
+        super((x+40), (y - n*6 + i*12), velocity.x, int((i-n/2)*2), currentWeapon, -1, MISSILE_RADIUS);
+    }
+
+    static createMissiles(){
+        if (weapons.numL > 0){ 
+            weapons.numL--;
+            sShip.currentWeapon = PICTURES.LASER;
+        }
+        for (var i = 0; i <= weapons.numPowerUp; i++){
+            //arr.push(new Missile());
+            weapons.weapons[weapons.numWeapons] = new Missile(i);
+            weapons.numWeapons = (weapons.numWeapons + 1) % MAX_WEAPONS;
+        }
+        
+        weapons.numL==0?sShip.currentWeapon=PICTURES.MISSILE:0;
+    }
+
+    moveWeapon(){
+        super.drawObject();
+        if (this.x > 1200) {
+            weapons.deleteWeapon(this.id);
+        }
+    }
+
+    drawWeaponPause(){
+        this.drawAnimationPause();
+    }
+
+    onHit(){
+        if (this.t == PICTURES.MISSILE) weapons.deleteWeapon(this.id); //delete when the missile is not a laser;
+        return this.t;
+    }
+}
+
+//Paralysis enemies
+class Plasmaball extends Weapon{
+    constructor(i){//set missile
+        var n = weapons.numPowerUp;
+        var currentWeapon = sShip.currentWeapon;
+        var velocity = WeaponVelocity.get(currentWeapon);
+        velocity = velocity.rotate(8*((i-n/2)*2));
+        const [x,y] = getShipLocation();
+        super((x+40), (y - n*6 + i*12), velocity.x, velocity.y, currentWeapon, -1);
+        this.alp = 100;
+        this.sec = FPS * 1.5;
+    }
+
+    static createPlasmaball(){
+        if (weapons.numL > 0){ 
+            weapons.numL--;
+            sShip.currentWeapon = PICTURES.LPLASMABALL;
+        }
+
+        for (var i = 0; i <= weapons.numPowerUp; i++){
+            //arr.push(new Missile());
+            weapons.weapons[weapons.numWeapons] = new Plasmaball(i);
+            weapons.numWeapons = (weapons.numWeapons + 1) % MAX_WEAPONS;
+        }
+        
+        weapons.numL==0?sShip.currentWeapon = PICTURES.PLASMABALL:0;
+    }
+
+    moveWeapon(){
+        this.xp *= Math.pow(0.98, 60/FPS);
+        this.yp *= Math.pow(0.98, 60/FPS);
+        setAlp(int(this.alp));
+        super.drawObject();
+        setAlp(100);
+        if (this.x > 1200 || this.sec <= 0) {
+            weapons.deleteWeapon(this.id);
+        }
+        this.alp = this.alp>20?this.alp * Math.pow(0.985, 60/FPS):this.alp;
+        
+        this.sec -= 1;
+    }
+
+    drawWeaponPause(){
+        setAlp(int(this.alp));
+        this.drawObjectPause();
+        setAlp(100);
+    }
+
+    onHit(){
+        //weapons.deleteWeapon(this.id);
+        this.sec -= FPS * 0.1; //reduce 0.3second of the duration of plasmaball 
+        for (var i = 0 ; i < int(FPS*0.3); i++)
+            this.alp = this.alp>20?this.alp * Math.pow(0.985, 60/FPS):this.alp;
+        return this.t;
+    }
+}
+
+//Turn Extra energies into Beam gauge
+class Destorybeam {//*****TODO*****
+
+}
+
+class Beams {//*****TODO*****
+
+}
+
+class Framethrower {//*****TODO*****
+
+}
+
+class HomingMissiles {//*****TODO*****
+
+} 
+
+//Bounce between enemies
+class BounceMissiles {//*****TODO*****
+
 }
 
 
 //エフェクト（爆発演出）の管理
-class Effect {
-    constructor(x,y,n,t){
-        this.x = x;
-        this.y = y;
-        this.n = n;
-        this.t = t;
+const setEffectFunc = new Map();
+setEffectFunc.set(PICTURES.EXPLOSION,function(x,y,n,d){return Explosion.setExplosion(x,y,n,d);});
+setEffectFunc.set(PICTURES.PURPLESHOCK,function(x,y,n,d){return PurpleShock.setShock(x,y,n,d);});
+setEffectFunc.set(PICTURES.YELLOWSHOCK,function(x,y,n,d){return YellowShock.setShock(x,y,n,d);});
+
+const effectOnHitFrame = new Map();
+effectOnHitFrame.set(PICTURES.EXPLOSION, 5);
+effectOnHitFrame.set(PICTURES.PURPLESHOCK, 0);
+effectOnHitFrame.set(PICTURES.YELLOWSHOCK, 0);
+
+const MAX_EFFECTS = 100;
+
+class Effects {
+    constructor(){
+        this.effects = new Array(MAX_EFFECTS);
+        this.numEffects = 0;
+        for (var i = 0; i < MAX_EFFECTS; i++) this.effects[i] = null;
     }
 
-    drawEffect(){
-        if(this.n > 0){
-            var n = int(this.n);
-            drawImgTS(3, (9-n)*128, 0, 128, 128, this.x - 64, this.y - 64, 128, 128);
-            this.n -= 1 * 30/FPS;
+    setEffect(effect, x, y, n, duration){
+        setEffectFunc.get(effect)(x,y,n,duration);
+    }
+
+    drawEffects(){
+        for (var i = 0; i < MAX_EFFECTS; i++){
+            if (this.effects[i]){
+                this.effects[i].drawEffect();
+                this.effects[i].duration == 0? this.deleteEffect(i):0;
+            }
+        }
+    }
+
+    drawEffectsPause(){
+        for (var i = 0; i < MAX_EFFECTS; i++){
+            if (this.effects[i]){
+                this.effects[i].drawAnimationPause();
+            }
+        }
+    }
+
+    deleteEffect(i){
+        if (this.effects[i]){
+            this.effects.splice(i,1,null);
         }
     }
 }
 
-const MAX_EFFECTS = 100;
-
-class Explosions{
-    constructor(){
-        this.explosions = new Array(MAX_EFFECTS);
-        this.numExplosions = 0;
-        for (var i = 0; i < MAX_EFFECTS; i++) this.explosions[i] = null;
-    }
-
-    setExplosion(x,y,n,t){
-        this.explosions[this.numExplosions] = new Effect(x,y,n,t);
-        this.numExplosions = (this.numExplosions + 1) % MAX_EFFECTS;
-    }
-
-    drawExplosions(){
-        for (var i = 0; i < MAX_EFFECTS; i++){
-            if (!this.explosions[i]) continue;
-            this.explosions[i].drawEffect();
-            if (this.explosions[i].n == 0) this.deleteExplosions(i);
+class Effect extends Anime{
+    constructor(x,y,xp,yp,t,duration, startFrame = 0){
+        super(x,y,xp,yp,t,duration,startFrame);
+        if (this.drawEffect == undefined){
+            throw new Error("drawEffect must be implemented");
         }
+        this.id = effects.numEffects;
+    }
+}
+
+class Explosion extends Effect{
+    constructor(x,y,n,duration){
+        super(x,y,-1,0,PICTURES.EXPLOSION,duration, n);
     }
 
-    deleteExplosions(i){
-        if (this.explosions[i]){
-            delete this.explosions[i];
-            this.explosions[i] = null;
-            //console.log("explosion deleted");
-        }
+    static setExplosion(x,y,n,duration){
+        effects.effects[effects.numEffects] = new Explosion(x,y,n,duration);
+        effects.numEffects = (effects.numEffects+1) % MAX_EFFECTS;
+    }
+
+    drawEffect(){
+        this.drawAnimation();
+    }
+}
+
+class PurpleShock extends Effect{
+    constructor(x,y,n,duration){
+        super(x,y,-1,0,PICTURES.PURPLESHOCK,duration, n);
+    }
+
+    static setShock(x,y,n,duration){
+        effects.effects[effects.numEffects] = new PurpleShock(x,y,n,duration);
+        effects.numEffects = (effects.numEffects+1) % MAX_EFFECTS;
+
+    }
+
+    drawEffect(){
+        this.drawAnimation();
+    }
+}
+
+class YellowShock extends Effect{
+    constructor(x,y,n,duration){
+        super(x,y,-1,0,PICTURES.YELLOWSHOCK,duration, n);
+    }
+
+    static setShock(x,y,n,duration){
+        effects.effects[effects.numEffects] = new YellowShock(x,y,n,duration);
+        effects.numEffects = (effects.numEffects+1) % MAX_EFFECTS;
+
+    }
+
+    drawEffect(){
+        this.drawAnimation();
     }
 }
 
@@ -331,115 +633,263 @@ class Explosions{
 //敵をセットする
 const MAX_ENEMIES = 100;
 
-class Enemies {
+const setEnemyFunc = new Map();
+setEnemyFunc.set(PICTURES.BULLET,function(x,y,xp,yp){return Bullet.createBullet(x,y,xp,yp)});
+setEnemyFunc.set(PICTURES.WING,function(x,y,xp,yp){return Wing.createWing(x,y,xp,yp)});
+setEnemyFunc.set(PICTURES.BALL,function(x,y,xp,yp){return Ball.createBall(x,y,xp,yp)});
+setEnemyFunc.set(PICTURES.HOPPER,function(x,y,xp,yp){return Hopper.createHopper(x,y,xp,yp)});
+setEnemyFunc.set(PICTURES.BLOCK,function(x,y,xp,yp){return Block.createBlock(x,y,xp,yp)});
+
+const enemyWeapons = new Array();
+enemyWeapons.push(PICTURES.BULLET);
+
+class Enemies{
     constructor(){
         this.enemies = new Array(MAX_ENEMIES);
         this.numEnemies = 0;
         for (var i = 0; i < MAX_ENEMIES; i++) this.enemies[i] = null;
     }
-    
-    setEnemies(x, y ,xp, yp, t){
-        var life = 1;
-        switch (t) {
-            case 4:   life = 1; break;
-            case 5:   life = 1 * stage; break;
-            case 6:   life = 3 * stage; break;
-            case 7:   life = 5 * stage; break;
-            case 8:   life = -1; break;
-        }
-        this.enemies[this.numEnemies] = new GameObject(x, y, xp, yp, t, life);
-        this.numEnemies = (this.numEnemies + 1) % MAX_ENEMIES;
-        //console.log("enemies setted");
-        
+
+    setEnemies(enemy,x,y,xp,yp){
+        setEnemyFunc.get(enemy)(x,y,xp,yp);
     }
-    
+
     moveEnemies(){
         for (var i = 0; i < MAX_ENEMIES; i++){
-            if (this.enemies[i]){ 
-                //shoot bullets;
-                
-                
-                switch (this.enemies[i].t) {
-
-                    //enemy 01
-                    case 5: if (this.enemies[i].t == 5 && rnd(10000) < 300*30/FPS) 
-                                this.setEnemies(this.enemies[i].x, this.enemies[i].y, -24, 0, 4);
-                            break;
-                    
-                    //enemy 02
-                    case 6: if (this.enemies[i].y < 60) this.enemies[i].yp = 8;
-                            else if (this.enemies[i].y > 660) this.enemies[i].yp = -8;  
-                            break;
-                    
-                    //enemy 03
-                    case 7: if (this.enemies[i].xp < 0){
-                                //this.enemies[i].xp = int(this.enemies[i].xp * Math.pow(0.95, 30/FPS)); //adjust speed with FPS;
-                                if(tmr % Math.ceil(FPS/30) == 0) this.enemies[i].xp = int(this.enemies[i].xp * 0.95); //adjust speed with FPS;
-                                if (this.enemies[i].xp == 0){
-                                    this.setEnemies(this.enemies[i].x, this.enemies[i].y, -20, 0, 4);
-                                    this.enemies[i].xp = 20;
-                                }
-                            }
-                            break;
-
-                    case 8: break;
-                }
-                
-                this.enemies[i].drawObject();
-
-                if (this.enemies[i].muteki > 0) this.enemies[i].muteki--;
-                
-
-                if (this.enemies[i].x < 0 || this.enemies[i].x > 1400) {
-                    this.deleteEnemies(i);
-                }
+            if (this.enemies[i]){
+                this.enemies[i].moveEnemy();
             }
         }
     }
 
-    decreaseEnemyLife(i){
-        if (this.enemies[i].muteki > 0) return;
-        this.enemies[i].life -= 1;
-        if (this.enemies[i].life == 0){ 
-            setExplosion(this.enemies[i].x, this.enemies[i].y, 9)
-            this.deleteEnemies(i);
-            score += 100;
-            if (score > hiScore) hiScore = score;
-        }
-        else{ 
-            setExplosion(this.enemies[i].x, this.enemies[i].y, 4);
-            this.enemies[i].muteki = ENEMY_IFRAME;
+    drawEnemiesPause(){
+        for (var i = 0; i < MAX_ENEMIES; i++){
+            if (this.enemies[i]){
+                this.enemies[i].drawEnemyPause();
+            }
         }
     }
 
-    deleteEnemies(i){
+    deleteEnemy(i){
         if (this.enemies[i]){
-            delete this.enemies[i];
-            this.enemies[i] = null;
-            //console.log("enemies deleted");
+            this.enemies.splice(i,1,null);
         }
     }
 
     getType(i){
-        return this.enemies[i].t;
+        if (this.enemies[i]) {
+            return this.enemies[i].t;
+        }
     }
 }
 
-const MAX_ITEMS = 100
+class Enemy extends GameObject{
+    constructor(x,y,xp,yp,t,life){
+        super(x,y,xp,yp,t,life);
+        if (this.moveEnemy == undefined){
+            throw new Error("moveEnemy must be implemented");
+        }
+        if (this.drawEnemyPause == undefined){
+            throw new Error("drawEnemiesPause must be implemented");
+        }
+        if (this.onHit == undefined){
+            throw new Error("onHit must be implemented");
+        }
+        this.id = enemies.numEnemies;
+
+
+    }
+
+    onHit(weapon){
+        if (this.muteki > 0) return;
+        const status = weaponStatus.get(weapon)();
+        for (var i = 0; i < status.length; i++){
+            switch (status[i]) {
+                case STATUS.PARALYSE:
+                    this.paralyseTmr = 10 * FPS/30;
+                    break;
+            }
+        }
+
+        this.life -= 1;
+        if (this.life == 0){ 
+            effects.setEffect(PICTURES.EXPLOSION,this.x, this.y, 0, picturesFrame.get(PICTURES.EXPLOSION));
+            enemies.deleteEnemy(this.id);
+            score += 100;
+            if (score > hiScore) hiScore = score;
+        }
+        else{ 
+            const curEffect =  WeaponEffect.get(weapon);
+            const duration = picturesFrame.get(curEffect) - effectOnHitFrame.get(curEffect)
+            effects.setEffect(curEffect,this.x, this.y, effectOnHitFrame.get(curEffect), duration);
+
+        }
+    }
+}
+
+class Bullet extends Enemy{
+    constructor(x,y,xp,yp){
+        super(x,y,xp,yp,PICTURES.BULLET,1);
+    }
+
+    static createBullet(x,y,xp,yp){
+        enemies.enemies[enemies.numEnemies] = new Bullet(x,y,xp,yp);
+        enemies.numEnemies = (enemies.numEnemies + 1) % MAX_ENEMIES;
+    }
+
+    moveEnemy(){
+        this.drawObject();
+        if (this.x < 0 || this.x > 1400) {
+            enemies.deleteEnemy(this.id);
+        }
+    }
+
+    drawEnemyPause(){
+        this.drawAnimationPause();
+    }
+
+    onHit(weapon){
+        super.onHit(weapon);   
+    }
+}
+
+class Wing extends Enemy{
+    constructor(x,y,xp,yp){
+        super(x,y,xp,yp,PICTURES.WING,1*stage);
+    }
+
+    static createWing(x,y,xp,yp){
+        enemies.enemies[enemies.numEnemies] = new Wing(x,y,xp,yp);
+        enemies.numEnemies = (enemies.numEnemies + 1) % MAX_ENEMIES;
+    }
+
+    moveEnemy(){
+        if (this.muteki > 0) this.muteki--;
+        if (!this.paralyseTmr && rnd(10000) < 300*30/FPS) 
+            enemies.setEnemies(PICTURES.BULLET, this.x, this.y, -24, 0);
+        this.drawObject();
+        if (this.x < 0 || this.x > 1400) {
+            enemies.deleteEnemy(this.id);
+        }
+    }
+
+    drawEnemyPause(){
+        this.drawAnimationPause();
+    }
+
+    onHit(weapon){
+        super.onHit(weapon);
+    }
+}
+
+class Ball extends Enemy{
+    constructor(x,y,xp,yp){
+        super(x,y,xp,yp,PICTURES.BALL,3*stage);
+    }
+
+    static createBall(x,y,xp,yp){
+        enemies.enemies[enemies.numEnemies] = new Ball(x,y,xp,yp);
+        enemies.numEnemies = (enemies.numEnemies + 1) % MAX_ENEMIES;
+    }
+
+    moveEnemy(){
+        if (this.muteki > 0) this.muteki--;
+        if (this.y < 60) this.yp = 8;
+        else if (this.y > 660) this.yp = -8;
+        this.drawObject();
+        if (this.x < 0 || this.x > 1400) {
+            enemies.deleteEnemy(this.id);
+        }
+    }
+
+    drawEnemyPause(){
+        this.drawAnimationPause();
+    }
+
+    onHit(weapon){
+        super.onHit(weapon);
+    }
+}
+
+class Hopper extends Enemy{
+    constructor(x,y,xp,yp){
+        super(x,y,xp,yp,PICTURES.HOPPER,5*stage);
+    }
+
+    static createHopper(x,y,xp,yp){
+        enemies.enemies[enemies.numEnemies] = new Hopper(x,y,xp,yp);
+        enemies.numEnemies = (enemies.numEnemies + 1) % MAX_ENEMIES;
+    }
+
+    moveEnemy(){
+        if (this.muteki > 0) this.muteki--;
+        if (this.xp < 0 && !this.paralyseTmr){
+            if(tmr % Math.ceil(FPS/30) == 0) this.xp = int(this.xp * 0.95);
+            if (this.xp == 0){
+                enemies.setEnemies(PICTURES.BULLET, this.x, this.y, -20, 0);
+                this.xp = 20;
+            }
+        }
+        this.drawObject();
+        if (this.x < 0 || this.x > 1400) {
+            enemies.deleteEnemy(this.id);
+        }
+    }
+
+    drawEnemyPause(){
+        this.drawAnimationPause();
+    }
+
+    onHit(weapon){
+        super.onHit(weapon);
+    }
+}
+
+class Block extends Enemy{
+    constructor(x,y,xp,yp){
+        super(x,y,xp,yp,PICTURES.BLOCK,-1);
+    }
+
+    static createBlock(x,y,xp,yp){
+        enemies.enemies[enemies.numEnemies] = new Block(x,y,xp,yp);
+        enemies.numEnemies = (enemies.numEnemies + 1) % MAX_ENEMIES;
+    }
+
+    moveEnemy(){
+        if (this.muteki > 0) this.muteki--;
+        this.drawObject();
+        if (this.x < 0 || this.x > 1400) {
+            enemies.deleteEnemy(this.id);
+        }
+    }
+
+    drawEnemyPause(){
+        this.drawAnimationPause();
+    }
+
+    onHit(weapon){
+        super.onHit(weapon);
+        this.paralyseTmr *= 0;
+    }
+}
 
 //アイテムをセットする
-class Items { // *****TODO*****
+const MAX_ITEMS = 5;
+
+const setItemsFunc = new Map();
+setItemsFunc.set(PICTURES.ITEM_E, function(x,y,xp,yp){return Item_E.createItem_E(x,y,xp,yp)});
+setItemsFunc.set(PICTURES.ITEM_M, function(x,y,xp,yp){return Item_M.createItem_M(x,y,xp,yp)});
+setItemsFunc.set(PICTURES.ITEM_L, function(x,y,xp,yp){return Item_L.createItem_L(x,y,xp,yp)});
+ 
+class Items {
     constructor(){
         this.items = new Array(MAX_ITEMS);
         this.numItems = 0;
+        for (var i = 0; i < MAX_ITEMS; i++) this.items[i] = null;
     }
 
-    setItems(x, y ,xp, yp, t){
-        var life = -1;
-        this.items[this.numItems] = new GameObject(x, y, xp, yp, t, life);
-        this.numItems = (this.numItems + 1) % MAX_ITEMS;
-        //console.log("items setted");
-        
+    setItems(item, x, y ,xp, yp){
+        setItemsFunc.get(item)(x,y,xp,yp);
     }
 
     moveItems(){
@@ -448,8 +898,10 @@ class Items { // *****TODO*****
         }
     }
 
-    getType(i){
-        return this.items[i].t;
+    drawItemsPause(){//TODO*****
+        for (var i = 0; i < MAX_ITEMS; i++){
+            if (this.items[i]) this.items[i].drawItemPause();
+        }
     }
     
     deleteItems(i){
@@ -460,60 +912,145 @@ class Items { // *****TODO*****
     }
 }
 
+class Item extends GameObject{
+    constructor(x,y,xp,yp,t){
+        super(x,y,xp,yp,t,-1);
+        this.id = items.numItems;
+    }
+    moveItem(){
+        this.drawAnimation();
+        if (this.x < 0) items.deleteItems(this.id);
+    }
 
+    drawItemPause(){
+        this.drawAnimationPause();
+    }
+}
 
+class Item_E extends Item{
+    constructor(x,y,xp,yp){
+        super(x,y,xp,yp,PICTURES.ITEM_E);
+    }
+
+    static createItem_E(x,y,xp,yp){
+        items.items[items.numItems] = new Item_E(x,y,xp,yp);
+        items.numItems = (items.numItems + 1) % MAX_ITEMS;
+    }
+
+    onHit(){
+        if (sShip.getEnergy() < MAX_SHIP_ENERGY) sShip.life++;
+    }
+}
+
+class Item_M extends Item{
+    constructor(x,y,xp,yp){
+        super(x,y,xp,yp,PICTURES.ITEM_M);
+    }
+
+    static createItem_M(x,y,xp,yp){
+        items.items[items.numItems] = new Item_M(x,y,xp,yp);
+        items.numItems = (items.numItems + 1) % MAX_ITEMS;
+    }
+
+    onHit(){
+        if (weapons.numPowerUp < sShip.getEnergy()) weapons.numPowerUp++;
+    }
+}
+
+class Item_L extends Item{
+    constructor(x,y,xp,yp){
+        super(x,y,xp,yp,PICTURES.ITEM_L);
+    }
+
+    static createItem_L(x,y,xp,yp){
+        items.items[items.numItems] = new Item_L(x,y,xp,yp);
+        items.numItems = (items.numItems + 1) % MAX_ITEMS;
+    }
+
+    onHit(){
+        weapons.numL += 50;
+    }
+}
+
+//Main game methods
+var weapons = new Weapons();
 var enemies = new Enemies(); 
-var missiles = new Missiles();
-var explosions = new Explosions();
+var effects = new Effects();
 var items = new Items();
 
 function initObject(){
+    weapons = new Weapons();
     enemies = new Enemies();
-    missiles = new Missiles();
-    explosions = new Explosions();
+    effects = new Effects();
+    items = new Items();
 }
 
 function setEnemies(){
     var sec = int(tmr/FPS);
-    if ((sec >= 4 && sec < 10) && tmr % (20*FPS/30)  == 0) enemies.setEnemies(1300, 60+rnd(600), -16, 0, 5);
+    if ((sec >= 4 && sec < 10) && tmr % (20*FPS/30)  == 0) enemies.setEnemies(PICTURES.WING, 1300, 60+rnd(600), -16, 0);
     
-    if ((sec >= 14 && sec < 20) && tmr % (20*FPS/30) == 0) enemies.setEnemies(1300, 60+rnd(600), -12, rnd(2)?8:-8 , 6);
+    if ((sec >= 14 && sec < 20) && tmr % (20*FPS/30) == 0) enemies.setEnemies(PICTURES.BALL, 1300, 60+rnd(600), -12, rnd(2)?8:-8);
     
-    if ((sec >= 24 && sec < 30) && tmr % (20*FPS/30) == 0) enemies.setEnemies(1300, 360+rnd(300), -48, -10, 7);
+    if ((sec >= 24 && sec < 30) && tmr % (20*FPS/30) == 0) enemies.setEnemies(PICTURES.HOPPER, 1300, 360+rnd(300), -48, -10);
     
-    if ((sec >= 34 && sec < 50) && tmr % (60*FPS/30) == 0) enemies.setEnemies(1300, rnd(720-192), -6, 0, 8);
+    if ((sec >= 34 && sec < 50) && tmr % (60*FPS/30) == 0) enemies.setEnemies(PICTURES.BLOCK, 1300, rnd(720-192), -6, 0);
     
     if ((sec >= 54 && sec < 70) && tmr % (20*FPS/30) == 0) {
-        enemies.setEnemies(1300, 60+rnd(300), -16, 4, 5);
-        enemies.setEnemies(1300, 360+rnd(300), -16, -4, 5);
+        enemies.setEnemies(PICTURES.WING, 1300, 60+rnd(300), -16, 4);
+        enemies.setEnemies(PICTURES.WING, 1300, 360+rnd(300), -16, -4);
     }
 
     if (sec >= 74 && sec < 90) {
-        if(tmr % (20*FPS/30) == 0) enemies.setEnemies(1300, 60+rnd(600), -12, rnd(2)?8:-8 , 6);
-        if(tmr % (45*FPS/30) == 0) enemies.setEnemies(1300, rnd(720-192), -8, 0, 8);
+        if(tmr % (20*FPS/30) == 0) enemies.setEnemies(PICTURES.BALL, 1300, 60+rnd(600), -12, rnd(2)?8:-8);
+        if(tmr % (45*FPS/30) == 0) enemies.setEnemies(PICTURES.BLOCK, 1300, rnd(720-192), -8, 0, 8);
     }
 
     if (sec >= 94 && sec < 110) {
-        if (tmr % (10*FPS/30) == 0) enemies.setEnemies(1300, 360, -24, rnd(11)-5, 5);
-        if (tmr % (20*FPS/30) == 0) enemies.setEnemies(1300, 360+rnd(300), -56, -(4+rnd(12)), 7);
+        if (tmr % (10*FPS/30) == 0) enemies.setEnemies(PICTURES.WING, 1300, 360, -24, rnd(11)-5);
+        if (tmr % (20*FPS/30) == 0) enemies.setEnemies(PICTURES.HOPPER, 1300, 360+rnd(300), -56, -(4+rnd(12)));
     }
 }
 
 function setItems(){
-    if (tmr % (12*FPS) == 0) items.setItems(1300, 60 + rnd(600), -10, 0, rnd(3) + 9);
+    if (tmr % (12*FPS) == 0) {
+        var itemProbability = new Map();
+        var energyLoss = MAX_SHIP_ENERGY - getEnergy();
+        itemProbability.set(PICTURES.ITEM_E, 25 + energyLoss*2);
+        itemProbability.set(PICTURES.ITEM_M, 25 - energyLoss);
+        itemProbability.set(PICTURES.ITEM_L, 25 - energyLoss);
+        //^Add new items here^
+        //itemProbability.values().forEach((v) => console.log("prob: " + v));
+
+        //sum of the total probability of items
+        var sumOfProbability = 0;
+        itemProbability.values().forEach((v) => sumOfProbability += v);
+            
+        var rand = rnd(sumOfProbability) + 1;
+        //console.log("original = " + rand);
+        //select a random item to set based on the probability
+        const spawnItem = function(v){
+            if (rand > sumOfProbability) return;
+            if (itemProbability.get(v)<rand) {
+                rand = rand-itemProbability.get(v);
+            }
+            else {
+                items.setItems(v, 1300, 60 + rnd(600), -10, 0);
+                rand += sumOfProbability;
+            }
+        }
+        itemProbability.keys().forEach((v) => spawnItem(v));
+    }
 }
 
-function setMissile(){
-    missiles.setMissile();
+function setWeapon(t){
+    weapons.setWeapon(t);
+    //console.log("Weapon setted");
 }
 
 function moveObjects(){
     enemies.moveEnemies();
     items.moveItems();
-}
-
-function moveMissile(){
-     missiles.moveMissile();
+    weapons.moveWeapon();
 }
 
 function initSShip(){
@@ -529,56 +1066,33 @@ function getEnergy(){
 }
 
 function getShipLocation(){
-    return [sShip.ship.x, sShip.ship.y];
+    return [sShip.x, sShip.y];
 }
 
-
-//
 function hitCheck(){
     for (var i = 0; i < MAX_ENEMIES; i++){
         if (!(enemies.enemies[i])) continue;
-        var r1 = MISSILE_RADIUS;
-        var r2 = (img[enemies.getType(i)].width + img[enemies.getType(i)].height)/4;
-
         //Enemies x SShip
-        if (enemies.enemies[i].hitCheck(sShip.ship, SELF_RADIUS, r2) && sShip.ship.muteki == 0){
-            //explosions.setExplosion(enemies.enemies[i].x, enemies.enemies[i].y, 9);
-            sShip.ship.life--;
-            sShip.ship.muteki = IFRAME;
-            
-            enemies.decreaseEnemyLife(i);
+        if (sShip.muteki == 0 && GameObject.hitCheck(sShip, enemies.enemies[i])){
+            enemies.enemies[i].onHit(sShip.onHit());
         }
-
         if (!(enemies.enemies[i])) continue;
-
-
-        //Enemies x Missile
-        for (var j = 0; j < MAX_MISSILES; j++){
-            if (enemies.enemies[i].t == 4) break;
-            if (!(missiles.missiles[j])) continue;
-            if (enemies.enemies[i].hitCheck(missiles.missiles[j], r1,r2)){
-                //explosions.setExplosion(enemies.enemies[i].x, enemies.enemies[i].y, 9);
-                enemies.decreaseEnemyLife(i);
-                if(!missiles.isLaser(j)) missiles.deleteMissiles(j);
-                break;
+        //Enemies x Weapons
+        for (var j = 0; j < MAX_WEAPONS; j++){
+            if (!(weapons.weapons[j])) continue;
+            if (enemies.enemies[i].muteki == 0 && GameObject.hitCheck(weapons.weapons[j], enemies.enemies[i])){
+                if (!enemyWeapons.includes(enemies.getType(i)))
+                    enemies.enemies[i].onHit(weapons.weapons[j].onHit());
+                if(!enemies.enemies[i]) break;
             }
         }
     }
-
     //Ship x items
     for (var i = 0; i < MAX_ITEMS; i++){
         if (!items.items[i]) continue;
-        var t = items.getType(i);
-        var r = (img[t].width + img[t].height)/4;
-        if (items.items[i].hitCheck(sShip.ship, SELF_RADIUS, r)){
-            switch (t){
-                case 9:  if (sShip.getEnergy() < MAX_SHIP_ENERGY) sShip.ship.life++; break;
-                case 10: if (missiles.numPowerUp < sShip.getEnergy()) missiles.numPowerUp++; break;
-                case 11: missiles.numLaser += 50; break;
-            }
-            
+        if (GameObject.hitCheck(sShip, items.items[i])){
+            items.items[i].onHit();
             items.deleteItems(i);
-
         }
     }
 }
@@ -615,8 +1129,12 @@ function setExplosion(x,y,n){
     explosions.setExplosion(x,y,n);
 }
 
+function setShock(x,y,n){
+    shocks.setShock(x,y,n);
+}
+
 function drawEffects(){
-    explosions.drawExplosions();
+    effects.drawEffects();
 }
 
 function gameoverCheck(){
@@ -628,6 +1146,7 @@ function gameoverCheck(){
 }
 
 function stageHandle(){
+    if (scene == SCENE.SETTING) return;
     if (tmr < FPS*4) fText("STAGE " + stage, 600, 300, 50, "cyan");
     if (tmr > FPS*114 && tmr < FPS*118) fText("STAGE CLEAR", 600, 300, 50, "cyan");
     if (tmr == FPS * 120) {
@@ -650,9 +1169,9 @@ function drawHiScore(){
 function showBulletStatus(){
     setAlp(uiOpacity);
     drawImg(10, 70, 560);
-    fTextN("X " + missiles.numPowerUp + "/" + sShip.getEnergy(), 200, 580, 50, 40, "lightblue");
+    fTextN("X " + weapons.numPowerUp + "/" + sShip.getEnergy(), 200, 580, 50, 40, "lightblue");
     drawImg(11, 70, 613);
-    fTextN("X " + missiles.numLaser, 200, 630, 50, 40, "lightblue");
+    fTextN("X " + weapons.numL, 200, 630, 50, 40, "lightblue");
     setAlp(100);
 }  
 
@@ -700,7 +1219,6 @@ function pauseGame(){
     }
 }
 
-//x1,y1 : top left, x2,y2 : bottom right
 function isMouseInABox(x, y, dx, dy){
     if (tapX > x && tapX < x + dx && tapY > y && tapY < y + dy) return true;
     return false;
@@ -710,6 +1228,7 @@ function isMouseInABox(x, y, dx, dy){
 
 //*****USER MENUS*****
 
+//method to scroll menu items
 function scrollMenu(totalMenuItems){
     if (key[CONTROL.get("UP")] == 1) {
         menu--;
@@ -830,7 +1349,7 @@ class BoxButton {
     }
 }
 
-//Title Screen / Main menu
+//---Title Screen / Main menu---
 
 const SELECTED = true;
 //Buttons
@@ -887,11 +1406,7 @@ function mainMenu(){
     
 }
 
-
-
-
-//Setting Menu
-
+//---Setting Menu---
 
 //fps drag bar
 var fpsBar = new SlidingBar(312, 240, 576, 40, 30, 144, 1, FPS);
@@ -926,16 +1441,17 @@ const settingBackButtonFunction = function(){
     tapC = 0;
     menu = 0;
 }
-var settingBackButton = new BoxButton(50, 625, 300, 50, 40, "BACK[ESC]","cyan","purple",70, settingBackButtonFunction);
+var settingBackButton = new BoxButton(475, 625, 250, 50, 40, "BACK[ESC]","cyan","purple",70, settingBackButtonFunction);
 
 var dragging = false;
 var BarCD = 2 * (FPS/30);
-
+var settingtmr = 0;
 //Setting Menu
 function settingMenu(){
+    settingtmr++;
     fpsBar.active = true;
     if (stage > 0) fpsBar.active = false;
-    fText("SETTING", 600, 50, 40, "yellow")
+    if (menu != 1) fText("SETTING", 600, 50, 40, "yellow")
     //drawImg(13, 200, 100);
 
     const totalMenuItems = 4;
@@ -948,6 +1464,8 @@ function settingMenu(){
     else if (uiButton.isPointing()) menu = 1;
     else if (controlButton.isPointing()) menu = 2;
     else if (settingBackButton.isPointing()) menu = totalMenuItems-1;
+
+    if (menu == 1) gameUI();
     
     fpsButton.drawButton(menu == 0? SELECTED:!SELECTED);
     uiButton.drawButton(menu == 1? SELECTED:!SELECTED);
@@ -956,8 +1474,8 @@ function settingMenu(){
 
     //keyboard <- / -> change fps
     if (menu == 0){
-        if (key[CONTROL.get("LEFT")] && (tmr % BarCD == 0)) fpsBar.changeValue(fpsBar.getValue() - 1);
-        if (key[CONTROL.get("RIGHT")] && (tmr % BarCD == 0)) fpsBar.changeValue(fpsBar.getValue() - 1);
+        if (key[CONTROL.get("LEFT")] && ((settingtmr % BarCD) == 0)) fpsBar.changeValue(fpsBar.getValue() - 1);
+        if (key[CONTROL.get("RIGHT")] && ((settingtmr % BarCD) == 0)) fpsBar.changeValue(fpsBar.getValue() + 1);
     }
     
     fpsBar.dragBar();
@@ -972,8 +1490,8 @@ function settingMenu(){
     
     //keyboard <- / -> change ui opacity
     if (menu == 1) {
-        if (key[CONTROL.get("LEFT")] && (tmr % BarCD == 0)) uiBar.changeValue(--uiOpacity);
-        if (key[CONTROL.get("RIGHT")] && (tmr % BarCD == 0)) uiBar.changeValue(++uiOpacity);
+        if (key[CONTROL.get("LEFT")] && (settingtmr % BarCD == 0)) uiBar.changeValue(--uiOpacity);
+        if (key[CONTROL.get("RIGHT")] && (settingtmr % BarCD == 0)) uiBar.changeValue(++uiOpacity);
     }
 
     uiBar.dragBar();
@@ -999,8 +1517,7 @@ function settingMenu(){
     
 }
 
-//Controls menu
-
+//---Controls menu---
 
 //Back Button
 const controlsBackButtonFunction = function(){
@@ -1011,47 +1528,39 @@ const controlsBackButtonFunction = function(){
     tapC = 0;
     menu = 0;
 }
-var controlsBackButton = new BoxButton(50, 625, 300, 50, 40, "BACK[ESC]","cyan","purple",70, controlsBackButtonFunction);
+var controlsBackButton = new BoxButton(475, 625, 250, 50, 40, "BACK[ESC]","cyan","purple",70, controlsBackButtonFunction);
 
 //Up key
-
 var upButton = new BoxButton(100,100,200,50,40,"UP","cyan","purple",70);
 
 var modifyUpButton = new BoxButton(350,100,250,50,40,"ArrowUp","white","purple",70);
 
 //down key
-
 var downButton = new BoxButton(100,230,200,50,40,"DOWN","cyan","purple",70);
 
 var modifyDownButton = new BoxButton(350,230,250,50,40,"ArrowDown","white","purple",70);
 
 //left key
-
-
 var leftButton = new BoxButton(100,360,200,50,40,"LEFT","cyan","purple",70);
 
 var modifyLeftButton = new BoxButton(350,360,250,50,40,"ArrowLeft","white","purple",70);
 
 //right key
-
 var rightButton = new BoxButton(100,490,200,50,40,"RIGHT","cyan","purple",70);
 
 var modifyRightButton = new BoxButton(350,490,250,50,40,"ArrowRight","white","purple",70);
 
 //fire key
-
 var fireButton = new BoxButton(600,100,200,50,40,"FIRE","cyan","purple",70);
 
 var modifyFireButton = new BoxButton(850,100,250,50,40,"[Space]","white","purple",70);
 
 //auto key
-
 var autoButton = new BoxButton(600,230,200,50,40,"AUTO","cyan","purple",70);
 
 var modifyAutoButton = new BoxButton(850,230,250,50,40,"a","white","purple",70);
 
 //select key
-
 var selectButton = new BoxButton(600,360,200,50,40,"SELECT","cyan","purple",70);
 
 var modifySelectButton = new BoxButton(850,360,250,50,40,"Enter","white","purple",70);
@@ -1124,6 +1633,14 @@ function controlsMenu(){
     const totalMenuItems = 8;
 
     if (subMenu == -1){
+        if (key[CONTROL.get("LEFT")] == 1) {
+            menu-=4;
+            key[CONTROL.get("LEFT")] = 2;
+        }
+        if (key[CONTROL.get("RIGHT")] == 1) {
+            menu+=4;
+            key[CONTROL.get("RIGHT")] = 2;
+        }
         scrollMenu(totalMenuItems);
 
         if (upButton.isPointing()) menu = 0;
@@ -1202,7 +1719,7 @@ function controlsMenu(){
 
 }
 
-//Pause Menu
+//---Pause Menu---
 const quitButtonFunction = function(){
     key[CONTROL.get("SELECT")] = 2;
     key[CONTROL.get("FIRE")] = 2;
@@ -1233,17 +1750,17 @@ const pauseSettingButtonFunction = function(){
 var pauseSettingButton = new BoxButton(400,375,400,50,40,"SETTING","cyan","purple",70,pauseSettingButtonFunction);
 
 function pauseMenu(){
-    tmr--;
     if (key[CONTROL.get("PAUSE")] == 1){ 
         scene = SCENE.STAGE;
         key[CONTROL.get("PAUSE")] = 2;
         return;
     }
 
-    sShip.ship.drawObjectPause();
-    for (var i = 0; i < MAX_ENEMIES; i++) enemies.enemies[i]?enemies.enemies[i].drawObjectPause():0;
-    for (var i = 0; i < MAX_MISSILES; i++) missiles.missiles[i]?missiles.missiles[i].drawObjectPause():0;
-    for (var i = 0; i < MAX_ITEMS; i++) items.items[i]?items.items[i].drawObjectPause():0;
+    sShip.drawObjectPause();
+    enemies.drawEnemiesPause();
+    weapons.drawWeaponsPause();
+    items.drawItemsPause();
+    effects.drawEffectsPause();
     
     pauseButton();
     fText("PAUSE", 600, 200, 80, "yellow");
@@ -1274,5 +1791,15 @@ function pauseMenu(){
             quitButton.onClick();
         }
     }
+}
+
+function gameoverMenu(){
+    drawScore();
+    const [x,y] = getShipLocation();
+    if (tmr > FPS*5) {scene = SCENE.TITLE; stage = -999}
+    else if (tmr % int(FPS*1/6) == 1) effects.setEffect(PICTURES.EXPLOSION, x + rnd(120) - 60, y + rnd(120) - 60, 0, picturesFrame.get(PICTURES.EXPLOSION));
+    moveObjects();
+    drawEffects();
+    fText("GAME OVER", 600, 300, 50, "red");
 }
 

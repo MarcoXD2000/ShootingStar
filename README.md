@@ -29,13 +29,25 @@ Add support on adjustable FPS
 - Game Mechanic change
     - The maximun number of extra missiles is equals to the current health.
 
+# 1.0.0
+- Fixed bugs caused by timer running in the setting menu when the game is paused
+- Implemented adjustable and expandable item spawn probability list.
+- Updated the structure of the main game code, it is now more expandable.
+- Added new weapon "Plasma ball"
+- Added new sprites for new weapon "Plasma ball"
+- Added new sprites for new effects "shock" 
+
+
+
+
+***Next Update: Weapon Update
+
 
 ***TODO
 Long Laser
 Enemy from the back
 Energy and max number of missile
 Enemy from the screen
-Display of ammo
 Boss
 Enemy AI
 UI Opacity setting
