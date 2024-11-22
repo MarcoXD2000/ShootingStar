@@ -147,7 +147,6 @@ function mainloop(){
             gameUI(); 
             moveObjects();
             moveSShip();
-            moveMissile();
             setEnemies();
             setItems();
             hitCheck();
@@ -267,9 +266,9 @@ class GameObject extends Anime{
 }
 
 //自機の管理
-class SShip {
+class SShip extends GameObject{
     constructor(x, y){
-        this.ship = new GameObject(x,y,0,0,PICTURES.SHIP,MAX_SHIP_ENERGY,SELF_RADIUS);
+        super(x,y,0,0,PICTURES.SHIP,MAX_SHIP_ENERGY,SELF_RADIUS);
         //this.energy = 10;
         this.auto = false;
         this.missileTmr = 0;
@@ -279,19 +278,19 @@ class SShip {
 
     moveSShip(){
         //Ship movement
-        this.ship.x += int(((key[CONTROL.get("RIGHT")] && 1) - (key[CONTROL.get("LEFT")] && 1)) * 20 * 30/FPS);
-        if (this.ship.x >= 1000) this.ship.x = 999; 
-        if (this.ship.x <= 60) this.ship.x = 61;
-        this.ship.y += int(((key[CONTROL.get("DOWN")] && 1) - (key[CONTROL.get("UP")] && 1)) * 20 * 30/FPS); 
-        if (this.ship.y >= 680) this.ship.y = 679; 
-        if (this.ship.y <= 40) this.ship.y = 41;
+        this.x += int(((key[CONTROL.get("RIGHT")] && 1) - (key[CONTROL.get("LEFT")] && 1)) * 20 * 30/FPS);
+        if (this.x >= 1000) this.x = 999; 
+        if (this.x <= 60) this.x = 61;
+        this.y += int(((key[CONTROL.get("DOWN")] && 1) - (key[CONTROL.get("UP")] && 1)) * 20 * 30/FPS); 
+        if (this.y >= 680) this.y = 679; 
+        if (this.y <= 40) this.y = 41;
         
         //Touch/Mouse
         this.dragging = false;
         if (tapC > 0){     
             this.dragging = true;      
-            this.ship.x += int((tapX-this.ship.x)/6);
-            this.ship.y += int((tapY-this.ship.y)/6);            
+            this.x += int((tapX-this.x)/6);
+            this.y += int((tapY-this.y)/6);            
         }
         
         //missile movement
@@ -308,18 +307,18 @@ class SShip {
             key[CONTROL.get("FIRE")] = 2;      
         }
     
-        if (this.ship.muteki % 2 == 0) this.ship.drawObject();
-        if (this.ship.muteki > 0) this.ship.muteki--;
+        if (this.muteki % 2 == 0) this.drawObject();
+        if (this.muteki > 0) this.muteki--;
     }
 
     getEnergy(){
-        return this.ship.life;
+        return this.life;
     }
 
     onHit(){
-        sShip.ship.life--;
-        sShip.ship.muteki = IFRAME;    
-        return this.ship.t;
+        sShip.life--;
+        sShip.muteki = IFRAME;    
+        return this.t;
     }
 }
 
@@ -684,7 +683,7 @@ class Enemies{
     }
 }
 
-class Enemy extends GameObject{//*****TODO*****
+class Enemy extends GameObject{
     constructor(x,y,xp,yp,t,life){
         super(x,y,xp,yp,t,life);
         if (this.moveEnemy == undefined){
@@ -904,10 +903,6 @@ class Items {
             if (this.items[i]) this.items[i].drawItemPause();
         }
     }
-
-    getType(i){
-        return this.items[i].t;
-    }
     
     deleteItems(i){
         if (this.items[i]){
@@ -943,7 +938,7 @@ class Item_E extends Item{
     }
 
     onHit(){
-        if (sShip.getEnergy() < MAX_SHIP_ENERGY) sShip.ship.life++;
+        if (sShip.getEnergy() < MAX_SHIP_ENERGY) sShip.life++;
     }
 }
 
@@ -977,6 +972,7 @@ class Item_L extends Item{
     }
 }
 
+//Main game methods
 var weapons = new Weapons();
 var enemies = new Enemies(); 
 var effects = new Effects();
@@ -1044,7 +1040,6 @@ function setItems(){
         }
         itemProbability.keys().forEach((v) => spawnItem(v));
     }
-
 }
 
 function setWeapon(t){
@@ -1055,10 +1050,7 @@ function setWeapon(t){
 function moveObjects(){
     enemies.moveEnemies();
     items.moveItems();
-}
-
-function moveMissile(){
-     weapons.moveWeapon();
+    weapons.moveWeapon();
 }
 
 function initSShip(){
@@ -1074,14 +1066,14 @@ function getEnergy(){
 }
 
 function getShipLocation(){
-    return [sShip.ship.x, sShip.ship.y];
+    return [sShip.x, sShip.y];
 }
 
 function hitCheck(){
     for (var i = 0; i < MAX_ENEMIES; i++){
         if (!(enemies.enemies[i])) continue;
         //Enemies x SShip
-        if (sShip.ship.muteki == 0 && GameObject.hitCheck(sShip.ship, enemies.enemies[i])){
+        if (sShip.muteki == 0 && GameObject.hitCheck(sShip, enemies.enemies[i])){
             enemies.enemies[i].onHit(sShip.onHit());
         }
         if (!(enemies.enemies[i])) continue;
@@ -1098,9 +1090,7 @@ function hitCheck(){
     //Ship x items
     for (var i = 0; i < MAX_ITEMS; i++){
         if (!items.items[i]) continue;
-        var t = items.getType(i);
-        var r = (img[t].width + img[t].height)/4;
-        if (GameObject.hitCheck(sShip.ship, items.items[i])){
+        if (GameObject.hitCheck(sShip, items.items[i])){
             items.items[i].onHit();
             items.deleteItems(i);
         }
@@ -1238,6 +1228,7 @@ function isMouseInABox(x, y, dx, dy){
 
 //*****USER MENUS*****
 
+//method to scroll menu items
 function scrollMenu(totalMenuItems){
     if (key[CONTROL.get("UP")] == 1) {
         menu--;
@@ -1358,7 +1349,7 @@ class BoxButton {
     }
 }
 
-//Title Screen / Main menu
+//---Title Screen / Main menu---
 
 const SELECTED = true;
 //Buttons
@@ -1415,11 +1406,7 @@ function mainMenu(){
     
 }
 
-
-
-
-//Setting Menu
-
+//---Setting Menu---
 
 //fps drag bar
 var fpsBar = new SlidingBar(312, 240, 576, 40, 30, 144, 1, FPS);
@@ -1530,11 +1517,7 @@ function settingMenu(){
     
 }
 
-
-
-
-//Controls menu
-
+//---Controls menu---
 
 //Back Button
 const controlsBackButtonFunction = function(){
@@ -1548,44 +1531,36 @@ const controlsBackButtonFunction = function(){
 var controlsBackButton = new BoxButton(475, 625, 250, 50, 40, "BACK[ESC]","cyan","purple",70, controlsBackButtonFunction);
 
 //Up key
-
 var upButton = new BoxButton(100,100,200,50,40,"UP","cyan","purple",70);
 
 var modifyUpButton = new BoxButton(350,100,250,50,40,"ArrowUp","white","purple",70);
 
 //down key
-
 var downButton = new BoxButton(100,230,200,50,40,"DOWN","cyan","purple",70);
 
 var modifyDownButton = new BoxButton(350,230,250,50,40,"ArrowDown","white","purple",70);
 
 //left key
-
-
 var leftButton = new BoxButton(100,360,200,50,40,"LEFT","cyan","purple",70);
 
 var modifyLeftButton = new BoxButton(350,360,250,50,40,"ArrowLeft","white","purple",70);
 
 //right key
-
 var rightButton = new BoxButton(100,490,200,50,40,"RIGHT","cyan","purple",70);
 
 var modifyRightButton = new BoxButton(350,490,250,50,40,"ArrowRight","white","purple",70);
 
 //fire key
-
 var fireButton = new BoxButton(600,100,200,50,40,"FIRE","cyan","purple",70);
 
 var modifyFireButton = new BoxButton(850,100,250,50,40,"[Space]","white","purple",70);
 
 //auto key
-
 var autoButton = new BoxButton(600,230,200,50,40,"AUTO","cyan","purple",70);
 
 var modifyAutoButton = new BoxButton(850,230,250,50,40,"a","white","purple",70);
 
 //select key
-
 var selectButton = new BoxButton(600,360,200,50,40,"SELECT","cyan","purple",70);
 
 var modifySelectButton = new BoxButton(850,360,250,50,40,"Enter","white","purple",70);
@@ -1744,7 +1719,7 @@ function controlsMenu(){
 
 }
 
-//Pause Menu
+//---Pause Menu---
 const quitButtonFunction = function(){
     key[CONTROL.get("SELECT")] = 2;
     key[CONTROL.get("FIRE")] = 2;
@@ -1781,7 +1756,7 @@ function pauseMenu(){
         return;
     }
 
-    sShip.ship.drawObjectPause();
+    sShip.drawObjectPause();
     enemies.drawEnemiesPause();
     weapons.drawWeaponsPause();
     items.drawItemsPause();
@@ -1824,7 +1799,6 @@ function gameoverMenu(){
     if (tmr > FPS*5) {scene = SCENE.TITLE; stage = -999}
     else if (tmr % int(FPS*1/6) == 1) effects.setEffect(PICTURES.EXPLOSION, x + rnd(120) - 60, y + rnd(120) - 60, 0, picturesFrame.get(PICTURES.EXPLOSION));
     moveObjects();
-    moveMissile();
     drawEffects();
     fText("GAME OVER", 600, 300, 50, "red");
 }
