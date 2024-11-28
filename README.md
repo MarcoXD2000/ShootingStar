@@ -37,6 +37,11 @@ Add support on adjustable FPS
 - Added new sprites for new weapon "Plasma ball"
 - Added new sprites for new effects "shock" 
 
+# 1.1.0
+- Added new weapon "Funnel"
+- Added "equipment" property in SShip class
+- implemented catmullRomSpline
+- implemented vector class
 
 
 
