@@ -15,6 +15,11 @@ function setup(){
     loadImg(15, "image/Lplasmaball.png");
     loadImg(16, "image/shock4.0.png");
     loadImg(17, "image/Lshock.png");
+    loadImg(18, "image/funnel.png");
+    loadImg(19, "image/funnelG2.png");
+    loadImg(20, "image/funnelG3.png");
+    loadImg(21, "image/Lfunnel.png");
+    loadImg(22, "image/Lockon.png");
     
     initSShip();
     initObject();
@@ -56,6 +61,10 @@ const PICTURES = Object.freeze({
     LASER: 12,
     PLASMABALL: 14,
     LPLASMABALL: 15,
+    FUNNEL: 18,
+    FUNNELG2: 19,
+    FUNNELG3: 20,
+    LFUNNEL: 21,
     //EFFECTS
     EXPLOSION: 3,
     PURPLESHOCK: 16,
@@ -81,6 +90,10 @@ const picturesFrame = new Map();
     picturesFrame.set(PICTURES.LASER, 1);
     picturesFrame.set(PICTURES.PLASMABALL, 4);
     picturesFrame.set(PICTURES.LPLASMABALL, 4);
+    picturesFrame.set(PICTURES.FUNNEL, 2);
+    picturesFrame.set(PICTURES.FUNNELG2, 2);
+    picturesFrame.set(PICTURES.FUNNELG3, 2);
+    picturesFrame.set(PICTURES.LFUNNEL, 2);
     //EFFECTS
     picturesFrame.set(PICTURES.EXPLOSION, 9);
     picturesFrame.set(PICTURES.PURPLESHOCK, 10);
@@ -103,6 +116,10 @@ const WeaponEffect = new Map();
     WeaponEffect.set(PICTURES.LPLASMABALL, PICTURES.YELLOWSHOCK);
     WeaponEffect.set(PICTURES.MISSILE, PICTURES.EXPLOSION);
     WeaponEffect.set(PICTURES.LASER, PICTURES.EXPLOSION);
+    WeaponEffect.set(PICTURES.FUNNEL, PICTURES.EXPLOSION);
+    WeaponEffect.set(PICTURES.FUNNELG2, PICTURES.EXPLOSION);
+    WeaponEffect.set(PICTURES.FUNNELG3, PICTURES.EXPLOSION);
+    WeaponEffect.set(PICTURES.LFUNNEL, PICTURES.EXPLOSION);
 
 const SCENE = Object.freeze({
     TITLE: 0,
@@ -184,7 +201,7 @@ function drawBG(spd){
     for(var i=1; i < 30; i++){
         var tx = i*40-offsetX;
         var bx = i*240-offsetX*6-3000;
-        line(tx, horizonY, bx, 720, "sliver");
+        line(tx, horizonY, bx, 720, "silver");
     }
     for(var i=1; i < 12; i++){
         lineW(1+int(i/3));
@@ -211,10 +228,10 @@ class Anime {
     
     drawAnimation(){      
         if (this.duration == 0) return;  
+        this.totalFrame = picturesFrame.get(this.t);
         var frameWidth = img[this.t].width/this.totalFrame;
         var frameHeight = img[this.t].height;
-        this.x = this.x + this.xp * 30/FPS;
-        this.y = this.y + this.yp * 30/FPS;
+        this.moveAnimation();
         drawImgTS(this.t, frameWidth*this.frame, 0, frameWidth, frameHeight, this.x-frameWidth/2, this.y-frameHeight/2, frameWidth, frameHeight);
         if (this.totalFrame > 1){
             this.frame_FPS_counter = (this.frame_FPS_counter + 1 * 30/FPS);
@@ -222,6 +239,11 @@ class Anime {
             if (this.frame == 0) this.frame += this.startFrame;
         }
         this.duration--;
+    }
+
+    moveAnimation(){
+        this.x = this.x + this.xp * 30/FPS;
+        this.y = this.y + this.yp * 30/FPS;
     }
 
     drawAnimationPause(){
@@ -235,6 +257,7 @@ const MISSILE_RADIUS = 12;
 const SELF_RADIUS = 30;
 const DEBUG_GAME = true;
 
+
 class GameObject extends Anime{
     constructor(x, y, xp, yp, t, life, r = -1){
         super(x,y,xp,yp,t,-1);
@@ -243,25 +266,34 @@ class GameObject extends Anime{
         this.paralyseTmr = 0;
         if (r == -1) r = (img[t].width/this.totalFrame + img[t].height)/4
         this.radius = r;
+        this.coord = new vec2d(x, y);
     }
     
     drawObject(){        
-        if (DEBUG_GAME) sCir(this.x,this.y,this.radius,"lime");
-
+        
         if (this.paralyseTmr > 0){ 
             this.drawObjectPause(); 
             this.paralyseTmr--;
             return;
         }
         this.drawAnimation();
+        if (DEBUG_GAME) sCir(this.x,this.y,this.radius,"lime");
+
+        this.coord.x = this.x;
+        this.coord.y = this.y;
     }
 
     drawObjectPause(){
         this.drawAnimationPause();
+        if (DEBUG_GAME) sCir(this.x,this.y,this.radius,"lime");
     }
 
     static hitCheck(a,b){
-        if (getDis(a.x, a.y, b.x, b.y) < (a.radius + b.radius)) return true;
+        if (GameObject.getObjDis(a,b) < (a.radius + b.radius)) return true;
+    }
+
+    static getObjDis(a,b){
+        return getDis(a.x, a.y, b.x, b.y);
     }
 }
 
@@ -273,24 +305,27 @@ class SShip extends GameObject{
         this.auto = false;
         this.missileTmr = 0;
         this.dragging = false;
-        this.currentWeapon = PICTURES.MISSILE;
+        this.currentWeapon = PICTURES.FUNNEL;
+        this.equipments = new Map();
     }
 
     moveSShip(){
         //Ship movement
-        this.x += int(((key[CONTROL.get("RIGHT")] && 1) - (key[CONTROL.get("LEFT")] && 1)) * 20 * 30/FPS);
-        if (this.x >= 1000) this.x = 999; 
-        if (this.x <= 60) this.x = 61;
-        this.y += int(((key[CONTROL.get("DOWN")] && 1) - (key[CONTROL.get("UP")] && 1)) * 20 * 30/FPS); 
-        if (this.y >= 680) this.y = 679; 
-        if (this.y <= 40) this.y = 41;
+        this.equipments.values().forEach((e) => e?e.moveEquipment():0);
+        this.xp = int(((key[CONTROL.get("RIGHT")] && 1) - (key[CONTROL.get("LEFT")] && 1)) * 20);
+        if (this.x + this.xp >= 1000){ this.xp = 999 - this.x;} 
+        if (this.x + this.xp <= 60) { this.xp = 61 - this.x;}
+        this.yp = int(((key[CONTROL.get("DOWN")] && 1) - (key[CONTROL.get("UP")] && 1)) * 20); 
+        if (this.y + this.yp >= 680) { this.yp = 679 - this.y;} 
+        if (this.y + this.yp <= 40) { this.yp = 41 - this.y;}
+
         
         //Touch/Mouse
         this.dragging = false;
         if (tapC > 0){     
             this.dragging = true;      
-            this.x += int((tapX-this.x)/6);
-            this.y += int((tapY-this.y)/6);            
+            this.xp = int((tapX-this.x)/6);
+            this.yp = int((tapY-this.y)/6);            
         }
         
         //missile movement
@@ -308,7 +343,13 @@ class SShip extends GameObject{
         }
     
         if (this.muteki % 2 == 0) this.drawObject();
+        else this.moveAnimation();
         if (this.muteki > 0) this.muteki--;
+    }
+
+    drawShipPause(){
+        this.equipments.values().forEach((e) => e.drawEquipmentPause());
+        this.drawObjectPause();
     }
 
     getEnergy(){
@@ -331,6 +372,7 @@ WeaponVelocity.set(PICTURES.MISSILE,new vec2d(40,0));
 WeaponVelocity.set(PICTURES.LASER,new vec2d(40,0));
 WeaponVelocity.set(PICTURES.PLASMABALL,new vec2d(35,0));
 WeaponVelocity.set(PICTURES.LPLASMABALL,new vec2d(35,0));
+WeaponVelocity.set(PICTURES.FUNNEL,new vec2d(0,0));
 
 const STATUS = Object.freeze({
     PARALYSE: 0,
@@ -341,12 +383,16 @@ setWeaponFunc.set(PICTURES.MISSILE, function(){return Missile.createMissiles()})
 setWeaponFunc.set(PICTURES.LASER, function(){return Missile.createMissiles()});
 setWeaponFunc.set(PICTURES.PLASMABALL, function(){return Plasmaball.createPlasmaball()});
 setWeaponFunc.set(PICTURES.LPLASMABALL, function(){return Plasmaball.createPlasmaball()});
+setWeaponFunc.set(PICTURES.FUNNEL, function(){return sShip.equipments.get('funnel').fireMissile()});
 
 const weaponStatus = new Map();
 weaponStatus.set(PICTURES.MISSILE, function(){return[]});
 weaponStatus.set(PICTURES.LASER, function(){return[]});
 weaponStatus.set(PICTURES.PLASMABALL, function(){return[]});
 weaponStatus.set(PICTURES.LPLASMABALL, function(){return [STATUS.PARALYSE]});
+weaponStatus.set(PICTURES.FUNNEL, function(){return[]});
+weaponStatus.set(PICTURES.FUNNELG2, function(){return[]});
+weaponStatus.set(PICTURES.FUNNELG3, function(){return[]});
 weaponStatus.set(PICTURES.SHIP, function(){return[]})
 
 const MAX_WEAPONS = 1000;
@@ -404,37 +450,70 @@ class Weapon extends GameObject{
 }
 
 class Missile extends Weapon{
-    constructor(i){//set missile
-        var n = weapons.numPowerUp;
-        var currentWeapon = sShip.currentWeapon;
-        var velocity = WeaponVelocity.get(currentWeapon);
-        const [x,y] = getShipLocation();
-        super((x+40), (y - n*6 + i*12), velocity.x, int((i-n/2)*2), currentWeapon, -1, MISSILE_RADIUS);
+    constructor(n, i, pic, obj, homingTarget = null){//set missile
+        var velocity = WeaponVelocity.get(pic);
+        velocity.y = int((i-(n/2))*2);
+        const coord = obj.coord;
+        var x = coord.x;
+        var y = coord.y;
+        var angle = 180*Math.atan(velocity.y/velocity.x)/Math.PI;
+        if (homingTarget) {
+            var direction = homingTarget.coord.subtraction(obj.coord);
+            velocity = velocity.rotate(angle = 180*Math.atan(direction.y/direction.x)/Math.PI);
+            //console.log(velocity.x, velocity.y, tmr);
+        }
+
+        super((x+40), (y - n*6 + i*12), velocity.x, velocity.y, pic, -1, MISSILE_RADIUS);
+        this.rotateAngle = angle;
     }
 
     static createMissiles(){
         if (weapons.numL > 0){ 
-            weapons.numL--;
             sShip.currentWeapon = PICTURES.LASER;
         }
         for (var i = 0; i <= weapons.numPowerUp; i++){
             //arr.push(new Missile());
-            weapons.weapons[weapons.numWeapons] = new Missile(i);
+            weapons.weapons[weapons.numWeapons] = new Missile(weapons.numPowerUp, i, sShip.currentWeapon, sShip);
             weapons.numWeapons = (weapons.numWeapons + 1) % MAX_WEAPONS;
         }
         
         weapons.numL==0?sShip.currentWeapon=PICTURES.MISSILE:0;
     }
 
+    static createFunnelMissiles(funnel){
+        var pic = PICTURES.MISSILE;
+        if (weapons.numL > 0){ 
+            pic = PICTURES.LASER;
+        }
+        var n = 0;
+        if (funnel.t == PICTURES.FUNNELG2) n = 1;
+        else if (funnel.t == PICTURES.FUNNELG3) n = 1;
+
+        for (var i = 0; i <= n; i++){
+            weapons.weapons[weapons.numWeapons] = new Missile(n, i, pic, funnel, funnel.closestEnemy);
+            weapons.numWeapons = (weapons.numWeapons + 1) % MAX_WEAPONS;
+        }
+    }
+
     moveWeapon(){
-        super.drawObject();
+        //super.drawObject();
+        this.moveAnimation();
+        var correct = new vec2d(-img[this.t].width/2, -img[this.t].height/2);
+        drawImgR(this.t, this.x + correct.x, this.y + correct.y, this.rotateAngle);
+        if (DEBUG_GAME) sCir(this.x,this.y,this.radius,"lime");
+        this.coord.x = this.x;
+        this.coord.y = this.y;
         if (this.x > 1200) {
             weapons.deleteWeapon(this.id);
         }
     }
 
     drawWeaponPause(){
-        this.drawAnimationPause();
+        // this.drawObjectPause();
+        var correct = new vec2d(-img[this.t].width/2, -img[this.t].height/2);
+        drawImgR(this.t, this.x + correct.x, this.y + correct.y, this.rotateAngle);
+        if (DEBUG_GAME) sCir(this.x,this.y,this.radius,"lime");
+
     }
 
     onHit(){
@@ -498,6 +577,141 @@ class Plasmaball extends Weapon{
             this.alp = this.alp>20?this.alp * Math.pow(0.985, 60/FPS):this.alp;
         return this.t;
     }
+}
+
+//Funnel
+class Funnel extends GameObject{
+    constructor(i){
+        var n = weapons.numPowerUp;
+        var currentWeapon = sShip.currentWeapon;  
+        var velocity = WeaponVelocity.get(currentWeapon);
+        var location = new vec2d(100,0);
+        location = location.rotate(35 * Math.ceil(i/2) * Math.pow(-1,i));
+        location = location.addition(sShip.coord);
+        super(sShip.coord.x, sShip.coord.y, velocity.x, velocity.y, currentWeapon, -1, MISSILE_RADIUS);
+        this.funnelID = i;
+        this.anker = new vec2d(location.x,location.y);
+        this.grade = PICTURES.FUNNEL;
+        this.closestEnemy = null;
+    }
+
+    moveFunnel(){
+        if (weapons.numL > 0) this.t = PICTURES.LFUNNEL;
+        else this.t = this.grade;
+        this.anker.x += sShip.xp * 30/FPS;
+        this.anker.y += sShip.yp * 30/FPS;
+
+        var curAnker = this.anker;
+        var speed = 1/8;
+        var homingRadius = sShip.equipments.get("funnel").homingRadius;
+
+        this.closestEnemy = findClosestEnemy(this);
+        if (this.closestEnemy && getDis(sShip.x, sShip.y, this.closestEnemy.x, this.closestEnemy.y) < homingRadius){ 
+            // line(this.x, this.y, closestEnemy.x, closestEnemy.y, "red");
+            drawImgC(22,this.closestEnemy.x, this.closestEnemy.y);
+            curAnker = new vec2d(-100, 0);
+            curAnker = curAnker.rotate(35 * Math.ceil(this.funnelID/2) * Math.pow(-1,this.funnelID));
+            curAnker = curAnker.addition(this.closestEnemy.coord);
+            if (getDis(this.x,this.y,this.closestEnemy.x,this.closestEnemy.y) <= 100) speed = 1;
+        }else this.closestEnemy = null;
+
+        const displacement = curAnker.subtraction(this.coord);
+        this.xp = displacement.x*speed + rnd(2) - 1;
+        this.yp = displacement.y*speed + rnd(2) - 1;
+    
+        
+        this.drawWire();
+        this.drawObject();
+        this.coord.x = this.x;
+        this.coord.y = this.y;
+
+    }
+
+    drawWeaponPause(){
+        this.drawWire();
+        this.drawObjectPause();
+    }
+
+    onHit(){
+        return this.t;
+    }
+
+    drawWire(){
+        var wireCol = "red";    
+        switch (this.t){
+            case PICTURES.FUNNELG2: wireCol = "green"; break;
+            case PICTURES.FUNNELG3: wireCol = "purple"; break;
+            case PICTURES.LFUNNEL: wireCol = "blue"; break;
+        }
+        //line(sShip.x, sShip.y, this.x, this.y, wireCol);
+        const shipDisplacement = this.coord.subtraction(sShip.coord);
+        var offset = 110 - shipDisplacement.length;
+        offset = offset>0?offset/5:0;
+        offset = this.funnelID%2==0?offset:-offset;
+        var ctrlPts = new Array();
+        ctrlPts.push(sShip.coord);
+        ctrlPts.push(new vec2d(sShip.coord.x + shipDisplacement.x/3, sShip.coord.y + shipDisplacement.y*4/5+offset));
+        ctrlPts.push(new vec2d(sShip.coord.x + shipDisplacement.x*2/3, sShip.coord.y + shipDisplacement.y-offset));
+        ctrlPts.push(this.coord);
+        var curvePts = catmullRomSpline(ctrlPts);
+        lineW(2);
+        drawCurve(curvePts, wireCol);
+    }
+}
+
+class Funnels {
+    constructor(){
+        this.numFunnel = 0;
+        this.numFunnelG2 = 0;
+        this.funnels = new Array();
+        this.addFunnel();
+        this.homingRadius = 400;
+    }
+
+    addFunnel(){
+        this.funnels.push(new Funnel(this.numFunnel++));
+        return this.funnels[this.numFunnel - 1];
+    }
+
+    upgradeFunnel(){
+        if (this.numFunnelG2 == 5){
+            this.funnels.forEach((f) => f.grade = PICTURES.FUNNELG3);
+            this.homingRadius = 550;
+            return;
+        }
+        this.funnels[this.numFunnelG2++].grade = PICTURES.FUNNELG2;
+    }
+
+    moveFunnels(){
+        var breath = (tmr%(2*FPS)) / (2*FPS);
+        if (breath > 1/2) breath = 1 - breath;
+        setAlp(uiOpacity * breath * 2);
+        sCir(sShip.x, sShip.y, this.homingRadius, "red");
+        setAlp(100);
+        if (this.numFunnel < 5 && weapons.numPowerUp >= this.numFunnel) this.addFunnel();
+        if ((weapons.numPowerUp-5) >= this.numFunnelG2) this.upgradeFunnel();
+        for (var i = 0; i < this.numFunnel; i++){
+            this.funnels[i].moveFunnel();
+        }
+    }
+
+    drawEquipmentPause(){
+        for (var i = 0; i < this.numFunnel; i++){
+            this.funnels[i].drawWeaponPause();
+        }
+    }
+
+    fireMissile(){
+        for (var i = 0; i < this.numFunnel; i++){
+            Missile.createFunnelMissiles(this.funnels[i]);
+        }
+        weapons.numL>0?weapons.numL--:0;
+    }
+
+    moveEquipment(){
+        this.moveFunnels();
+    }
+
 }
 
 //Turn Extra energies into Beam gauge
@@ -739,7 +953,7 @@ class Bullet extends Enemy{
 
     moveEnemy(){
         this.drawObject();
-        if (this.x < 0 || this.x > 1400) {
+        if (this.x < 0 || this.x > 1400 || this.y < -50 || this.y > 770) {
             enemies.deleteEnemy(this.id);
         }
     }
@@ -768,7 +982,7 @@ class Wing extends Enemy{
         if (!this.paralyseTmr && rnd(10000) < 300*30/FPS) 
             enemies.setEnemies(PICTURES.BULLET, this.x, this.y, -24, 0);
         this.drawObject();
-        if (this.x < 0 || this.x > 1400) {
+        if (this.x < 0 || this.x > 1400 || this.y < -50 || this.y > 770) {
             enemies.deleteEnemy(this.id);
         }
     }
@@ -797,7 +1011,7 @@ class Ball extends Enemy{
         if (this.y < 60) this.yp = 8;
         else if (this.y > 660) this.yp = -8;
         this.drawObject();
-        if (this.x < 0 || this.x > 1400) {
+        if (this.x < 0 || this.x > 1400 || this.y < -50 || this.y > 770) {
             enemies.deleteEnemy(this.id);
         }
     }
@@ -831,7 +1045,7 @@ class Hopper extends Enemy{
             }
         }
         this.drawObject();
-        if (this.x < 0 || this.x > 1400) {
+        if (this.x < 0 || this.x > 1400 || this.y < -50 || this.y > 770) {
             enemies.deleteEnemy(this.id);
         }
     }
@@ -858,7 +1072,7 @@ class Block extends Enemy{
     moveEnemy(){
         if (this.muteki > 0) this.muteki--;
         this.drawObject();
-        if (this.x < 0 || this.x > 1400) {
+        if (this.x < 0 || this.x > 1400 || this.y < -50 || this.y > 770) {
             enemies.deleteEnemy(this.id);
         }
     }
@@ -1044,7 +1258,6 @@ function setItems(){
 
 function setWeapon(t){
     weapons.setWeapon(t);
-    //console.log("Weapon setted");
 }
 
 function moveObjects(){
@@ -1055,6 +1268,7 @@ function moveObjects(){
 
 function initSShip(){
     sShip = new SShip(400, 360);
+    changeWeapon(sShip.currentWeapon);
 }
 
 function moveSShip(){
@@ -1131,6 +1345,12 @@ function setExplosion(x,y,n){
 
 function setShock(x,y,n){
     shocks.setShock(x,y,n);
+}
+
+function changeWeapon(weapon){
+    if (weapon == PICTURES.FUNNEL){
+        sShip.equipments.set("funnel", new Funnels());
+    }
 }
 
 function drawEffects(){
@@ -1224,7 +1444,23 @@ function isMouseInABox(x, y, dx, dy){
     return false;
 }
 
+function findClosestEnemy(obj){
+    var minDis = 1.1e99;
+    var objCoord = obj.coord;
+    var closest = null;
+    for (var i = 0; i < MAX_ENEMIES; i++){
+        if (!enemies.enemies[i]) continue;
+        if (enemyWeapons.includes(enemies.getType(i)) || enemies.getType(i) == PICTURES.BLOCK) continue;
+        var enemyCoord = enemies.enemies[i].coord;
+        var dis = getDis(objCoord.x, objCoord.y, enemyCoord.x, enemyCoord.y);
 
+        if (dis < minDis) {
+            minDis = dis;
+            closest = i;
+        }
+    }
+    return enemies.enemies[closest];
+}
 
 //*****USER MENUS*****
 
@@ -1357,8 +1593,8 @@ const playButtonFunction = function(){
     key[CONTROL.get("FIRE")] = 0;
     key[CONTROL.get("SELECT")] = 0;
     tapC = 0;
-    initSShip();
     initObject();
+    initSShip();
     score = 0; 
     stage = 1;
     scene = SCENE.STAGE;
@@ -1756,7 +1992,7 @@ function pauseMenu(){
         return;
     }
 
-    sShip.drawObjectPause();
+    sShip.drawShipPause();
     enemies.drawEnemiesPause();
     weapons.drawWeaponsPause();
     items.drawItemsPause();
