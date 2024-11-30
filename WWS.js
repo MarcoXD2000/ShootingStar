@@ -494,6 +494,20 @@ function drawImgR(n, x, y, ang) {//回転
 	}
 }
 
+// function drawImgTSR(n, sx, sy, sw, sh, cx, cy, cw, ch, ang, frame = 1) {//回転
+// 	if(img_loaded[n] == true) {
+// 		var w = img[n].width;
+// 		var h = img[n].height;
+// 		bg.save();
+// 		bg.translate(cx+w/2/frame, cy+h/2);
+// 		bg.rotate(Math.PI*ang/180);
+// 		bg.translate(-cx-w/2/frame, -cy-h/2);
+// 		bg.drawImage(img[n], sx, sy, sw, sh, cx, cy, cw, ch);
+// 		bg.restore();
+// 	}
+// }
+
+
 // ---------- 描画３ 文字 ----------
 function fText(str, x, y, siz, col) {
 	bg.font = int(siz) + "px bold monospace";//等幅フォントを指定
