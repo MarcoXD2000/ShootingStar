@@ -43,6 +43,10 @@ Add support on adjustable FPS
 - implemented catmullRomSpline
 - implemented vector class
 
+# 1.1.1
+- added shake and stop effect after getting hit
+- slightly adjusted funnel performance
+
 
 
 ***Next Update: Weapon Update
