@@ -270,7 +270,7 @@ class Anime {
 
 const MISSILE_RADIUS = 12;
 const SELF_RADIUS = 30;
-var MAX_SHIP_ENERGY = 1;
+var MAX_SHIP_ENERGY = 10;
 var AUTO_MISSILE_CD = int(5 * FPS/30); 
 var IFRAME = int(30 * FPS/30);
 var ENEMY_IFRAME = int(1 * FPS/30);
