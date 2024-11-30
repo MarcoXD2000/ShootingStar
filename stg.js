@@ -132,11 +132,6 @@ const SCENE = Object.freeze({
 });
 
 var FPS = 60;
-var MAX_SHIP_ENERGY = 10;
-var AUTO_MISSILE_CD = int(5 * FPS/30); 
-var IFRAME = int(30 * FPS/30);
-var ENEMY_IFRAME = int(1 * FPS/30);
-
 var tmr = 0;
 var scene = SCENE.TITLE;
 var stage = -999;
@@ -147,11 +142,14 @@ var uiOpacity = 80;
 var pauseTmr = 0;
 var shakeTmr = 0;
 var shakeStr = 0;
+var slowMoTmr = 0;
+var slowMoFactor = 0;
 
 function mainloop(){
     drawBG(1);
     setFPS(FPS);
     //console.log(tmr);
+    slowMoTmr>0?slowMoTmr--:0; 
     
     switch (scene) {
         case SCENE.TITLE:
@@ -166,8 +164,8 @@ function mainloop(){
             pauseTmr>0?pauseTmr--:tmr++;
             shakeTmr>0?shakeTmr--:0;
             pauseGame();
-            gameoverCheck();
             gameUI(); 
+            gameoverCheck();
             moveObjects();
             moveSShip();
             hitCheck();
@@ -177,8 +175,8 @@ function mainloop(){
             break;
 
         case SCENE.GAMEOVER:
-            pauseTmr>0?pauseTmr--:tmr++;
-            shakeTmr>0?shakeTmr--:0;
+            pauseTmr>0? pauseTmr--: slowMoTmr % slowMoFactor == 0? tmr++:0;
+            shakeTmr> 0 && slowMoTmr % slowMoFactor == 0? shakeTmr--:0;
             gameoverMenu();
             break;
 
@@ -196,9 +194,9 @@ function mainloop(){
 //背景のスクロール
 var bgx = 0;
 function drawBG(spd){
-    if (pauseTmr > 0 || scene==SCENE.PAUSE) spd = 0;
+    if (pauseTmr > 0 || scene==SCENE.PAUSE || slowMoTmr % 2 == 1) spd = 0;
     var [xShake,yShake] = [0,0];
-    if (shakeTmr > 0){
+    if (shakeTmr > 0 && scene!=SCENE.PAUSE){
         xShake = rnd(shakeStr) - Math.floor(shakeStr/2);
         yShake = rnd(shakeStr) - Math.floor(shakeStr/2);
     }
@@ -260,7 +258,7 @@ class Anime {
 
     drawAnimationPause(){
         var [xShake,yShake] = [0,0];
-        if (shakeTmr > 0){
+        if (shakeTmr > 0 && scene != SCENE.PAUSE){
             xShake = rnd(shakeStr) - Math.floor(shakeStr/2);
             yShake = rnd(shakeStr) - Math.floor(shakeStr/2);
         }
@@ -272,6 +270,10 @@ class Anime {
 
 const MISSILE_RADIUS = 12;
 const SELF_RADIUS = 30;
+var MAX_SHIP_ENERGY = 1;
+var AUTO_MISSILE_CD = int(5 * FPS/30); 
+var IFRAME = int(30 * FPS/30);
+var ENEMY_IFRAME = int(1 * FPS/30);
 var DEBUG_GAME = true;
 DEBUG_GAME = false;
 
@@ -532,7 +534,7 @@ class Missile extends Weapon{
     drawWeaponPause(){
         // this.drawObjectPause();
         var [xShake,yShake] = [0,0];
-        if (shakeTmr > 0){
+        if (shakeTmr > 0 && scene != SCENE.PAUSE){
             xShake = rnd(shakeStr) - Math.floor(shakeStr/2);
             yShake = rnd(shakeStr) - Math.floor(shakeStr/2);
         }
@@ -1294,7 +1296,7 @@ function setWeapon(t){
 }
 
 function moveObjects(){
-    if (pauseTmr > 0){
+    if (pauseTmr > 0 || slowMoTmr % slowMoFactor > 0){
         enemies.drawEnemiesPause();
         items.drawItemsPause();
         weapons.drawWeaponsPause();
@@ -1312,7 +1314,7 @@ function initSShip(){
 }
 
 function moveSShip(){
-    if (pauseTmr > 0){
+    if (pauseTmr > 0 || slowMoTmr % slowMoFactor > 0){
         sShip.drawShipPause();
         return;
     }
@@ -1399,7 +1401,7 @@ function changeWeapon(weapon){
 }
 
 function drawEffects(){
-    if (pauseTmr > 0) {
+    if (pauseTmr > 0 || slowMoTmr % slowMoFactor > 0) {
         effects.drawEffectsPause();
         return;
     }
@@ -1408,6 +1410,8 @@ function drawEffects(){
 
 function gameoverCheck(){
     if (pauseTmr == 0 && getEnergy() <= 0){ 
+        slowMoTmr = FPS*1;
+        slowMoFactor = 7;
         shakeTmr = FPS*5;
         shakeStr = 7;
         scene = SCENE.GAMEOVER;
@@ -1426,15 +1430,16 @@ function stageHandle(){
     }
 }
 
-function drawScore(){
-    setAlp(uiOpacity);
-    fText("SCORE " + score, 200, 50, 40, "white");
-    fText("HISCORE " + hiScore, 600, 50, 40, "yellow");
+function drawScore(x = 200, y = 50){
+    if (scene == SCENE.STAGE) setAlp(uiOpacity);
+    fText("SCORE " + score, x, y, 40, "white");
     setAlp(100);
 }
 
-function drawHiScore(){
-    fText("HISCORE " + hiScore, 600, 50, 40, "yellow");
+function drawHiScore(x = 600, y = 50){
+    if (scene == SCENE.STAGE) setAlp(uiOpacity);
+    fText("HISCORE " + hiScore, x, y, 40, "yellow");
+    setAlp(100);
 }
 
 function showBulletStatus(){
@@ -1451,6 +1456,7 @@ function gameUI(){
     stageHandle();
     pauseButton();
     drawScore();
+    drawHiScore();
     setAlp(70 * uiOpacity/100);
     fRect(10,550,310,160,"navy");
     setAlp(100);
@@ -2081,12 +2087,31 @@ function pauseMenu(){
 }
 
 function gameoverMenu(){
-    drawScore();
+    if (key[CONTROL.get("BACK")] == 1){ 
+        scene = SCENE.TITLE;
+        key[CONTROL.get("BACK")] = 2;
+        shakeTmr = 0;
+        slowMoTmr = 0;
+        return;
+    }
     const [x,y] = getShipLocation();
     if (tmr > FPS*5) {scene = SCENE.TITLE; stage = -999}
     else if (tmr % int(FPS*1/6) == 1) effects.setEffect(PICTURES.EXPLOSION, x + rnd(120) - 60, y + rnd(120) - 60, 0, picturesFrame.get(PICTURES.EXPLOSION));
+    if (slowMoTmr > FPS*3/4 && slowMoTmr < FPS) {
+        var breath = (FPS/4-(FPS-slowMoTmr))/(FPS/4);
+        if (breath > 1/2) breath = 1 - breath;
+        setAlp(100 * breath);
+        fRect(0,0,1200,720,"white");
+    }
     moveObjects();
     drawEffects();
-    fText("GAME OVER", 600, 300, 50, "red");
+    setAlp(100 * tmr/(FPS*5) * 0.9);
+    fRect(0,0,1200,720,"black");
+    setAlp(100);
+    if (slowMoTmr == 0) {
+        drawHiScore();
+        drawScore();
+        fText("GAME OVER", 600, 300, 50, "red");
+    }
 }
 
