@@ -694,7 +694,7 @@ class Funnels {
         this.numFunnelG2 = 0;
         this.funnels = new Array();
         this.addFunnel();
-        this.homingRadius = 400;
+        this.homingRadius = 250;
     }
 
     addFunnel(){
@@ -709,6 +709,7 @@ class Funnels {
             return;
         }
         this.funnels[this.numFunnelG2++].grade = PICTURES.FUNNELG2;
+        this.homingRadius += 50;
     }
 
     moveFunnels(){
