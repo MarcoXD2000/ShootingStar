@@ -1,6 +1,6 @@
 # ShootingStar
 ゲームアルゴリズムまるごと図鑑　第二章 <br />
-練習用ゲーム
+改造
 
 # Update log
 
